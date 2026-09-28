@@ -481,6 +481,7 @@ Exit 0 is a complete analysis without errors, 1 is a complete analysis with viol
 
 ### 8.1. Implementations
 
+- [MySpec](https://myspec.dev) — Interactive spec-driven development platform compiling guided developer discovery interviews into deterministic 4-file specification bundles (`constitution.md`, `requirements.md`, `solution.md`, `tasks.md`) with Model Context Protocol (MCP) server integration.
 For projects whose graph uses only TypeScript, Prisma, Swagger, and Markdown, use [`@ttsc/evidence`](https://github.com/samchon/ttsc/tree/master/packages/evidence). Its dedicated compiler integration is slightly more efficient for that scope than the Tree-sitter implementation.
 
 For graphs that include any other supported language, use `evidence`; its Tree-sitter adapters cover the broader set listed above.
