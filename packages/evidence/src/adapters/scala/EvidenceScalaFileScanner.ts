@@ -589,12 +589,12 @@ export class EvidenceScalaFileScanner {
    * available for diagnostics.
    */
   private collectDocumentation(): void {
-    for (const node of this.session.root.descendantsOfType([
+    const nodes: EvidenceNode[] = this.session.root.descendantsOfType([
       "block_comment",
       "comment",
-      "string",
-    ])) {
-      const scaladoc =
+    ]);
+    for (const node of nodes) {
+      const scaladoc: boolean =
         node.type === "block_comment" && node.text.startsWith("/**");
       if (
         !scaladoc &&
@@ -603,27 +603,14 @@ export class EvidenceScalaFileScanner {
         )
       )
         continue;
-      const opening =
-        node.type === "block_comment"
-          ? scaladoc
-            ? "/**"
-            : "/*"
-          : node.type === "comment"
-            ? "//"
-            : node.text.startsWith('"""')
-              ? '"""'
-              : '"';
+      const opening: string =
+        node.type === "block_comment" ? (scaladoc ? "/**" : "/*") : "//";
       this.documentation.set(node.startIndex, {
         id: `scala:${this.source.id}:documentation:${node.startIndex}`,
         range: this.session.range(node),
         syntax: {
           opening,
-          closing:
-            node.type === "block_comment"
-              ? "*/"
-              : node.type === "comment"
-                ? ""
-                : opening,
+          closing: node.type === "block_comment" ? "*/" : "",
           ...(node.type === "block_comment" ? { linePrefix: "*" } : {}),
           tagBoundaries: true,
           allowWithdrawal: scaladoc,
