@@ -20,7 +20,7 @@ export interface IEvidenceRubyDocumentation {
   id: string;
 
   /**
-   * Original text range occupied by the comment run or literal.
+   * Original text range occupied by the comment run.
    *
    * Annotation ranges exclude this text from associated site fingerprints.
    */
