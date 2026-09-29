@@ -440,18 +440,18 @@ export class EvidenceSwiftFileScanner {
    * their invalid placement.
    */
   private collectDocumentation(): void {
-    const nodes = this.session.root.descendantsOfType([
+    const nodes: EvidenceNode[] = this.session.root.descendantsOfType([
       "comment",
       "multiline_comment",
-      "line_string_literal",
-      "multi_line_string_literal",
     ]);
-    const text = new EvidenceSourceText(this.source.content);
+    const text: EvidenceSourceText = new EvidenceSourceText(
+      this.source.content,
+    );
     let previous: IEvidenceSwiftDocumentation | undefined;
     for (const node of nodes) {
-      const line = node.type === "comment";
-      const block = node.type === "multiline_comment";
-      const doc =
+      const line: boolean = node.type === "comment";
+      const block: boolean = node.type === "multiline_comment";
+      const doc: boolean =
         (line && node.text.startsWith("///")) ||
         (block && node.text.startsWith("/**"));
       if (
@@ -476,28 +476,14 @@ export class EvidenceSwiftFileScanner {
         this.documentation.set(node.endIndex, previous);
         continue;
       }
-      const opening = line
-        ? doc
-          ? "///"
-          : "//"
-        : block
-          ? doc
-            ? "/**"
-            : "/*"
-          : node.text.startsWith('"""')
-            ? '"""'
-            : '"';
+      const opening: string = line ? (doc ? "///" : "//") : doc ? "/**" : "/*";
       previous = {
         id: `swift:${this.source.id}:documentation:${node.startIndex}`,
         range: this.session.range(node),
         syntax: {
           opening,
-          closing: line ? "" : block ? "*/" : opening,
-          ...(line
-            ? { linePrefix: opening }
-            : block
-              ? { linePrefix: "*" }
-              : {}),
+          closing: line ? "" : "*/",
+          ...(line ? { linePrefix: opening } : { linePrefix: "*" }),
           tagBoundaries: true,
           allowWithdrawal: doc,
         },
