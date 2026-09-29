@@ -4,7 +4,7 @@ import type { IEvidenceSourceRange } from "../../structures/IEvidenceSourceRange
 import type { IEvidenceRubyDocumentationAttachment } from "./IEvidenceRubyDocumentationAttachment";
 
 /**
- * Retains one Ruby comment run or annotation-bearing unsupported literal.
+ * Retains one Ruby comment run and its declaration attachment candidates.
  *
  * EvidenceRubyAdapter attaches it after reopened declaration groups become
  * public, keeping tags on invalid positions available for diagnostics rather
