@@ -172,7 +172,8 @@ export async function test_config_discovery_entries(): Promise<void> {
           await assert.rejects(
             (): Promise<IEvidenceConfigPlan> =>
               EvidenceConfigLoader.plan(preferred),
-            /EACCES/u,
+            (cause: unknown): boolean =>
+              cause instanceof Error && cause.message.includes(preferred),
           );
         } finally {
           await chmod(ts, 0o600);
