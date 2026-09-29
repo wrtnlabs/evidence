@@ -8,7 +8,7 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * Attaches C# XML documentation and rejects inert source carriers.
  *
  * The fixture separates eligible declaration docs from code examples,
- * directives, strings, body comments, and inaccessible members.
+ * directives, body comments and inaccessible members while ignoring strings.
  *
  * 1. Extract evidence from XML documentation on public types, grouped fields, and
  *    methods.
@@ -105,13 +105,13 @@ export async function test_csharp_hosts(): Promise<void> {
     2,
   );
 
-  // Non-XML comments, strings, and docs on unpublished members are visible failures.
+  // Non-XML comments and docs on unpublished members remain visible failures.
   TestValidator.equals(
     "unsupported C# annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    10,
+    6,
   );
 
   const withdrawn = await new EvidenceCSharpAdapter().analyze(

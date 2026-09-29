@@ -141,49 +141,6 @@ export namespace EvidenceCSharpSyntax {
       : `${conversion} operator ${checked ? "checked " : ""}${normalize(type.text)}`;
   }
 
-  export function string(
-    node: EvidenceNode,
-  ): IEvidenceCommentSyntax | undefined {
-    const rawOpening = node.namedChildren.find(
-      (child) => child.type === "raw_string_start",
-    );
-    const rawClosing = node.namedChildren.find(
-      (child) => child.type === "raw_string_end",
-    );
-    if (rawOpening !== undefined && rawClosing !== undefined)
-      return {
-        opening: rawOpening.text,
-        closing: rawClosing.text + (node.text.endsWith("u8") ? "u8" : ""),
-        tagBoundaries: true,
-        allowWithdrawal: false,
-      };
-
-    if (node.type === "verbatim_string_literal")
-      return {
-        opening: '@"',
-        closing: node.text.endsWith('"u8') ? '"u8' : '"',
-        tagBoundaries: true,
-        allowWithdrawal: false,
-      };
-    if (node.type === "string_literal")
-      return {
-        opening: '"',
-        closing: node.text.endsWith('"u8') ? '"u8' : '"',
-        tagBoundaries: true,
-        allowWithdrawal: false,
-      };
-    if (node.type !== "interpolated_string_expression") return undefined;
-    const opening = /^(?:\$+@?"|@\$+")/u.exec(node.text)?.[0];
-    return opening === undefined
-      ? undefined
-      : {
-          opening,
-          closing: node.text.endsWith('"u8') ? '"u8' : '"',
-          tagBoundaries: true,
-          allowWithdrawal: false,
-        };
-  }
-
   function normalize(value: string): string {
     return value.replace(/\s+/gu, " ").trim();
   }

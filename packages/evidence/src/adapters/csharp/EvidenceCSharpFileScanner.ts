@@ -594,28 +594,6 @@ export class EvidenceCSharpFileScanner {
       for (const comment of sequence)
         this.carrierDocumentation.set(this.nodeKey(comment), documentation);
     }
-
-    const literals = new Map<string, EvidenceNode>();
-    for (const type of [
-      "string_literal",
-      "verbatim_string_literal",
-      "raw_string_literal",
-      "interpolated_string_expression",
-    ])
-      for (const literal of this.session.root.descendantsOfType(type))
-        literals.set(this.nodeKey(literal), literal);
-    for (const literal of literals.values()) {
-      const syntax = EvidenceCSharpSyntax.string(literal);
-      if (syntax === undefined) continue;
-      const range = this.session.range(literal);
-      const raw = EvidenceDocumentation.read(
-        this.source.content,
-        "csharp-probe",
-        range,
-        syntax,
-      ).text;
-      if (this.annotation(raw)) this.ensureDocumentation(range, syntax);
-    }
   }
 
   private attach(
