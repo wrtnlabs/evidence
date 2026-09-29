@@ -301,6 +301,8 @@ Incomplete analysis never passes as an empty population.
 
 `evidence.config.ts` exports one `IEvidenceConfig` with a `claims` array and an optional top-level `severity`. Severity defaults to `error`; claims inherit the top-level value, and references inherit their claim. The config is evaluated through the consumer's `ttsx` and validated with `typia` before any source is read.
 
+Without `--config`, commands look for `evidence.config.ts` first and `evidence.config.json` only when the TS entry is absent, within the effective `--cwd` directory. JSON is read directly without evaluating `ttsx`. An invalid, unreadable, directory or broken symlink at the preferred name remains an error; explicit paths never fall back. If neither candidate exists, the error names both. No-argument checker and loader APIs use the same order in the current working directory. Roots remain relative to the selected physical configuration file. `init` still defaults to creating `evidence.config.ts`.
+
 ### 4.1. Claim
 
 | Property | Type | Default | Behavior |
@@ -468,7 +470,7 @@ Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` 
 
 | Option | Behavior |
 | --- | --- |
-| `-c, --config <path>` | Config path, default `evidence.config.ts`. |
+| `-c, --config <path>` | Explicit config path; omission discovers TS before JSON with absence-only fallback. |
 | `--cwd <path>` | Resolve CLI paths from another directory. |
 | `--format <value>` | Output format from the table above. |
 | `-o, --output <path>` | Write the result to a file and keep stdout empty. |
@@ -476,6 +478,8 @@ Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` 
 | `-w, --watch` | Recheck `check` when a dependency changes; NDJSON with `--format json`. |
 
 Exit 0 is a complete analysis without errors, 1 is a complete analysis with violations, 2 is an invalid command or incomplete analysis. JSON reports carry `schemaVersion: 1`.
+
+Watch repeats implicit configuration discovery on each evaluation. Creating a preferred TS entry switches a JSON watch to TS; a broken TS entry fails visibly until repaired or removed. Deleting TS permits JSON selection again. Explicit `--config` paths stay fixed and report deletion instead of switching to a default. The watcher captures its working directory when constructed; embedding callers may supply `IEvidenceWatchOptions.cwd`.
 
 ## 8. References
 

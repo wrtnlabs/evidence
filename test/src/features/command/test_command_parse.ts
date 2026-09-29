@@ -26,7 +26,6 @@ export function test_command_parse(): void {
   const defaults: IEvidenceCheckCommand = {
     operation: "check",
     cwd: ".",
-    config: "evidence.config.ts",
     format: "text",
   };
   TestValidator.equals("bare check", EvidenceCommand.parse([]), defaults);

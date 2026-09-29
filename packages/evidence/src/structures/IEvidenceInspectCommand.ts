@@ -35,9 +35,10 @@ export interface IEvidenceInspectCommand {
   /**
    * Configuration path interpreted within the command directory.
    *
-   * Parsing defaults to evidence.config.ts when no override is supplied.
+   * Omission discovers evidence.config.ts before evidence.config.json with
+   * absence-only fallback. An explicit path selects only that file.
    */
-  config: string;
+  config?: string;
 
   /**
    * Text or JSON representation requested for inspection details.

@@ -8,6 +8,14 @@ import type { IEvidenceSourceDependency } from "../structures/IEvidenceSourceDep
  */
 export interface IEvidenceConfigDependencyScan {
   /**
+   * Physical configuration selected before dependency scanning begins.
+   *
+   * Omission means discovery failed. Watch compares selections across analysis
+   * so a newly preferred candidate cannot publish a result from the old file.
+   */
+  configFile?: string;
+
+  /**
    * File and directory dependencies that must invalidate configuration
    * evaluation.
    *

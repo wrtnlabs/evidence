@@ -27,10 +27,10 @@ export interface IEvidenceGraphCommand {
   /**
    * Configuration path used to build the exported graph.
    *
-   * Relative paths resolve from command cwd; parsing defaults to
-   * evidence.config.ts.
+   * Relative paths resolve from command cwd. Omission discovers
+   * evidence.config.ts before evidence.config.json with absence-only fallback.
    */
-  config: string;
+  config?: string;
 
   /**
    * Requested graph serialization or visualization format.

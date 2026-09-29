@@ -9,6 +9,14 @@ import type { tags } from "typia";
  */
 export interface IEvidenceWatchOptions {
   /**
+   * Directory anchoring configuration discovery and relative explicit paths.
+   *
+   * Omission captures process cwd during construction. Subsequent cwd changes
+   * cannot redirect the watcher. Implicit selection is repeated on each cycle.
+   */
+  cwd?: string;
+
+  /**
    * Positive delay between dependency snapshots, in milliseconds.
    *
    * Shorter intervals detect changes sooner while performing filesystem

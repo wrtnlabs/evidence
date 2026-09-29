@@ -13,6 +13,7 @@ import { EvidenceWatcher } from "./EvidenceWatcher";
 import { EvidenceWatchReporter } from "../reporters/EvidenceWatchReporter";
 import { EvidenceArtifactTypes } from "../internal/EvidenceArtifactTypes";
 import { EvidenceConfigFormat } from "../internal/EvidenceConfigFormat";
+import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
 import type { IEvidenceConfig } from "../structures/IEvidenceConfig";
 import { EvidenceTreeSitterAssetScope } from "../internal/EvidenceTreeSitterAssetScope";
 import type { IEvidencePackageManifest } from "../internal/IEvidencePackageManifest";
@@ -59,7 +60,7 @@ export namespace EvidenceCommand {
    *
    * @example
    *   EvidenceCommand.parse(["graph", "--format", "dot"]);
-   *   // { operation: "graph", cwd: ".", config: "evidence.config.ts", format: "dot" }
+   *   // { operation: "graph", cwd: ".", format: "dot" }
    */
   export function parse(args: readonly string[]): IEvidenceCommand {
     if (args.length === 1 && (args[0] === "-v" || args[0] === "--version"))
@@ -148,12 +149,12 @@ export namespace EvidenceCommand {
         ...optionalOutput(values),
       };
 
-    const config = values.get("config") ?? "evidence.config.ts";
+    const config: string | undefined = values.get("config");
     if (operation === "graph")
       return {
         operation,
         cwd,
-        config,
+        ...(config === undefined ? {} : { config }),
         format: graphFormat(values.get("format")),
         ...optionalOutput(values),
       };
@@ -166,7 +167,7 @@ export namespace EvidenceCommand {
         operation,
         target,
         cwd,
-        config,
+        ...(config === undefined ? {} : { config }),
         format: reportFormat(values.get("format")),
         ...optionalOutput(values),
       };
@@ -188,7 +189,7 @@ export namespace EvidenceCommand {
       return {
         operation,
         cwd,
-        config,
+        ...(config === undefined ? {} : { config }),
         format: reportFormat(values.get("format")),
         ...optionalOutput(values),
         ...(language === undefined ? {} : { language }),
@@ -198,7 +199,7 @@ export namespace EvidenceCommand {
     return {
       operation,
       cwd,
-      config,
+      ...(config === undefined ? {} : { config }),
       format: reportFormat(values.get("format")),
       ...optionalOutput(values),
       ...(watch ? { watch: true } : {}),
@@ -347,7 +348,10 @@ async function runWatch(
   baseCwd: string,
 ): Promise<IEvidenceCommandResult> {
   const cwd = path.resolve(baseCwd, command.cwd);
-  const configFile = path.resolve(cwd, command.config);
+  const configFile: string | undefined =
+    command.config === undefined
+      ? undefined
+      : path.resolve(cwd, command.config);
   const destination =
     command.output === undefined
       ? undefined
@@ -363,7 +367,7 @@ async function runWatch(
     );
   }
 
-  const watcher = new EvidenceWatcher(configFile);
+  const watcher: EvidenceWatcher = new EvidenceWatcher(configFile, { cwd });
   const interrupt = (): void => {
     void watcher.close();
   };
@@ -419,8 +423,12 @@ async function runAnalysis(
   baseCwd: string,
 ): Promise<IEvidenceCommandResult> {
   const cwd = path.resolve(baseCwd, command.cwd);
-  const configFile = path.resolve(cwd, command.config);
+  let configFile: string = path.resolve(
+    cwd,
+    command.config ?? "evidence.config.ts",
+  );
   try {
+    configFile = await EvidenceConfigLoader.locate(command.config, cwd);
     const analysis = await new EvidenceChecker(configFile).analyze();
     if (command.operation === "check")
       return writeReport(
@@ -774,6 +782,11 @@ const HELP = dedent`
     -w, --watch           Recheck whenever an active dependency changes.
     -h, --help            Show this help without loading configuration.
     -v, --version         Show the package version without loading configuration.
+
+  Configuration discovery:
+    Use evidence.config.ts, or evidence.config.json only when TS is absent.
+    Explicit --config paths and invalid selected files never fall back.
+    Watch repeats discovery after candidate changes; init defaults to TS.
 
   Formats:
     check, list, inspect, languages  text (default), json
