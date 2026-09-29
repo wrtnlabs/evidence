@@ -507,14 +507,13 @@ export class EvidenceDartFileScanner {
    * Detached carriers remain available for a truthful host diagnostic.
    */
   private collectDocumentation(): void {
-    const nodes = this.session.root.descendantsOfType([
+    const nodes: EvidenceNode[] = this.session.root.descendantsOfType([
       "comment",
       "documentation_comment",
-      "string_literal",
     ]);
     for (const node of nodes) {
-      const line = node.text.startsWith("///");
-      const block = node.text.startsWith("/**");
+      const line: boolean = node.text.startsWith("///");
+      const block: boolean = node.text.startsWith("/**");
       if (
         !line &&
         !block &&
@@ -523,8 +522,8 @@ export class EvidenceDartFileScanner {
         )
       )
         continue;
-      const previous = node.previousNamedSibling;
-      const prior =
+      const previous: EvidenceNode | null = node.previousNamedSibling;
+      const prior: IEvidenceDartDocumentation | undefined =
         previous === null
           ? undefined
           : this.documentation.get(previous.startIndex);
@@ -541,25 +540,19 @@ export class EvidenceDartFileScanner {
         this.documentation.set(node.startIndex, prior);
         continue;
       }
-      const opening = line
+      const opening: string = line
         ? "///"
         : block
           ? "/**"
           : node.text.startsWith("//")
             ? "//"
-            : node.text.startsWith("/*")
-              ? "/*"
-              : (node.text.match(/^(?:r)?(?:'''|"""|'|")/u)?.[0] ?? "");
+            : "/*";
       this.documentation.set(node.startIndex, {
         id: `dart:${this.source.id}:documentation:${node.startIndex}`,
         range: this.session.range(node),
         syntax: {
           opening,
-          closing: opening.startsWith("/*")
-            ? "*/"
-            : opening.startsWith("//")
-              ? ""
-              : opening.replace(/^r/u, ""),
+          closing: opening.startsWith("/*") ? "*/" : "",
           ...(opening.startsWith("/*")
             ? { linePrefix: "*" }
             : line
