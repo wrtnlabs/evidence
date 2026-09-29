@@ -1,6 +1,5 @@
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
-import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
 import type { EvidenceParseSession } from "../../parsers/EvidenceParseSession";
 import type { IEvidenceCommentSyntax } from "../../structures/IEvidenceCommentSyntax";
 import type { IEvidenceDiagnostic } from "../../structures/IEvidenceDiagnostic";
@@ -30,6 +29,18 @@ import { EvidenceSourceText } from "../../internal/EvidenceSourceText";
  * attachment.
  */
 export class EvidenceRubyFileScanner {
+  /**
+   * Heredoc bodies paired with their opening syntax positions.
+   *
+   * Tree-sitter places delayed bodies beside their originating statement.
+   * Fingerprints must retain those bodies without absorbing sibling
+   * declarations.
+   */
+  private readonly heredocs: Map<string, EvidenceNode> = new Map<
+    string,
+    EvidenceNode
+  >();
+
   /**
    * Collects declarations in source order for visibility and alias resolution.
    *
@@ -108,8 +119,8 @@ export class EvidenceRubyFileScanner {
     private readonly source: IEvidenceSourceFile,
   ) {
     this.text = new EvidenceSourceText(source.content);
+    this.indexHeredocs();
     this.collectDocumentation();
-    this.collectLiteralAnnotations();
   }
 
   /**
@@ -1152,14 +1163,22 @@ export class EvidenceRubyFileScanner {
     superclass?: string,
   ): IEvidenceRubyDeclaration {
     const documentation = this.attachedDocumentation(siteNode);
+    const ranges: IEvidenceSourceRange[] = this.contentWithHeredocs(
+      item,
+      content,
+    );
+    const end: number = Math.max(
+      siteNode.endIndex,
+      ...ranges.map((range: IEvidenceSourceRange): number => range.end.offset),
+    );
     const site: IEvidenceUnitSite = {
       id: this.siteId(siteNode),
       file: this.source.physicalPath,
       range: this.text.range(
         documentation?.range?.start?.offset ?? siteNode.startIndex,
-        siteNode.endIndex,
+        end,
       ),
-      content,
+      content: ranges,
     };
     const declaration: IEvidenceRubyDeclaration = {
       id: `ruby:${this.source.id}:declaration:${this.serial++}:${form}:${item.startIndex}`,
@@ -1182,6 +1201,80 @@ export class EvidenceRubyFileScanner {
     if (documentation !== undefined)
       this.attach(documentation, declaration.id, site.id);
     return declaration;
+  }
+
+  /**
+   * Pairs delayed heredoc bodies with openings in source order.
+   *
+   * Ruby consumes multiple openings in lexical order even when their bodies
+   * appear after separate statements on one line. Pairing globally preserves
+   * ownership across those sibling statements and nested containers.
+   */
+  private indexHeredocs(): void {
+    const openings: EvidenceNode[] = this.session.root
+      .descendantsOfType("heredoc_beginning")
+      .sort(
+        (left: EvidenceNode, right: EvidenceNode): number =>
+          left.startIndex - right.startIndex,
+      );
+    const bodies: EvidenceNode[] = this.session.root
+      .descendantsOfType("heredoc_body")
+      .sort(
+        (left: EvidenceNode, right: EvidenceNode): number =>
+          left.startIndex - right.startIndex,
+      );
+    const incomplete: boolean = bodies.some(
+      (body: EvidenceNode): boolean =>
+        !body.namedChildren.some(
+          (child: EvidenceNode): boolean =>
+            child.type === "heredoc_end" && child.text.trim() !== "",
+        ),
+    );
+    if (openings.length !== bodies.length || incomplete) {
+      this.problem(
+        "ruby-heredoc-body",
+        "Heredoc openings and delayed bodies cannot be paired completely.",
+        "Use complete heredoc expressions before checking their content fingerprints.",
+        this.session.root,
+      );
+      return;
+    }
+    openings.forEach((opening: EvidenceNode, index: number): void => {
+      const body: EvidenceNode | undefined = bodies[index];
+      if (body !== undefined) this.heredocs.set(this.nodeKey(opening), body);
+    });
+  }
+
+  /**
+   * Includes delayed literal bodies in the declaration's own semantic content.
+   *
+   * Bodies already inside a method or container range are not duplicated. A
+   * constant with several heredoc operands receives only its own paired
+   * bodies.
+   */
+  private contentWithHeredocs(
+    node: EvidenceNode,
+    content: IEvidenceSourceRange[],
+  ): IEvidenceSourceRange[] {
+    const ranges: IEvidenceSourceRange[] = [...content];
+    const openings: EvidenceNode[] =
+      node.descendantsOfType("heredoc_beginning");
+    for (const opening of openings) {
+      const body: EvidenceNode | undefined = this.heredocs.get(
+        this.nodeKey(opening),
+      );
+      if (
+        body === undefined ||
+        ranges.some(
+          (range: IEvidenceSourceRange): boolean =>
+            range.start.offset <= body.startIndex &&
+            range.end.offset >= body.endIndex,
+        )
+      )
+        continue;
+      ranges.push(this.session.range(body));
+    }
+    return ranges;
   }
 
   /**
@@ -1269,34 +1362,6 @@ export class EvidenceRubyFileScanner {
         this.text.range(first.startIndex, last.endIndex),
         syntax,
       );
-    }
-  }
-
-  /**
-   * Collects tag-bearing string and heredoc content as documentation mappings.
-   *
-   * These literal carriers support Evidence annotations even without comments.
-   */
-  private collectLiteralAnnotations(): void {
-    const contents = [
-      ...this.session.root.descendantsOfType("string_content"),
-      ...this.session.root.descendantsOfType("heredoc_content"),
-    ];
-    for (const content of contents) {
-      if (!this.annotation(content.text)) continue;
-      const range = this.session.range(content);
-      const id = `ruby:${this.source.id}:documentation:${range.start.offset}:${range.end.offset}`;
-      this.documentation.set(id, {
-        id,
-        range,
-        mapping: EvidenceDocumentation.read(this.source.content, id, range, {
-          opening: "",
-          closing: "",
-          tagBoundaries: true,
-          allowWithdrawal: false,
-        }),
-        attachments: [],
-      });
     }
   }
 
@@ -1477,17 +1542,6 @@ export class EvidenceRubyFileScanner {
    */
   private identityKey(identity: string[]): string {
     return JSON.stringify(identity);
-  }
-
-  /**
-   * Checks whether raw Ruby carrier text contains an Evidence annotation tag.
-   *
-   * The predicate is shared by comments, strings, and heredocs.
-   */
-  private annotation(raw: string): boolean {
-    return /(?:^|[\r\n])[ \t]*(?:#[ \t]*)?@(evidenceExcludeReview|evidenceReview|evidenceExclude|evidence|link|internal|hidden|ignore)\b/u.test(
-      raw,
-    );
   }
 
   /**

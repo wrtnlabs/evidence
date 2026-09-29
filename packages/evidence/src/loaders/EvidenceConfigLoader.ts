@@ -1,4 +1,4 @@
-import { readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import typia from "typia";
 import type { TypeGuardError } from "typia";
@@ -33,14 +33,14 @@ export namespace EvidenceConfigLoader {
    * JSON data and TypeScript default exports share artifact and shape
    * validation. Evaluation output goes to stderr, and failures reject rather
    * than returning partially validated configuration. Inactive declarations are
-   * still checked.
+   * still checked. Omission discovers evidence.config.ts before
+   * evidence.config.json, falling back only when the TS entry is absent.
+   * Explicit paths select exactly one file.
    *
    * @param file Configuration path, relative to the current working directory.
    */
-  export async function load(
-    file: string = "evidence.config.ts",
-  ): Promise<IEvidenceConfig> {
-    const filename = await resolveConfigFile(file);
+  export async function load(file?: string): Promise<IEvidenceConfig> {
+    const filename: string = await locate(file);
     const config = await evaluateResolvedConfig(filename);
     validateEvidenceConfig(config, filename);
     return config;
@@ -52,14 +52,49 @@ export namespace EvidenceConfigLoader {
    * Validation precedes filtering, so malformed disabled settings still fail.
    * Disabled and off populations are omitted before artifact I/O while active
    * entries retain their authored indices and configuration-relative roots.
+   * Omission uses the same absence-only TS-to-JSON discovery as load.
    */
-  export async function plan(
-    file: string = "evidence.config.ts",
-  ): Promise<IEvidenceConfigPlan> {
-    const filename = await resolveConfigFile(file);
+  export async function plan(file?: string): Promise<IEvidenceConfigPlan> {
+    const filename: string = await locate(file);
     return createEvidenceConfigPlan(
       await evaluateResolvedConfig(filename),
       filename,
+    );
+  }
+
+  /**
+   * Selects and resolves an explicit path or conventional configuration file.
+   *
+   * Omission checks evidence.config.ts before evidence.config.json in cwd. Only
+   * an absent directory entry permits fallback: broken symlinks, directories,
+   * access failures and selected-file errors remain failures. Explicit paths
+   * never fall back. Both spellings retain format validation.
+   */
+  export async function locate(
+    file?: string,
+    cwd: string = process.cwd(),
+  ): Promise<string> {
+    if (file !== undefined) return resolveConfigFile(resolve(cwd, file));
+    const candidates: string[] = ["evidence.config.ts", "evidence.config.json"];
+    for (const candidate of candidates) {
+      const filename: string = resolve(cwd, candidate);
+      // lstat distinguishes an absent entry from a symlink whose target is gone.
+      // Once an entry exists, its resolution failure cannot select another policy.
+      try {
+        await lstat(filename);
+      } catch (cause: unknown) {
+        if (
+          cause instanceof Error &&
+          "code" in cause &&
+          cause.code === "ENOENT"
+        )
+          continue;
+        throw cause;
+      }
+      return resolveConfigFile(filename);
+    }
+    throw new Error(
+      `No Evidence configuration found in ${resolve(cwd)}. Expected evidence.config.ts or evidence.config.json.`,
     );
   }
 }

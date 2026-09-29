@@ -27,10 +27,10 @@ export interface IEvidenceCheckCommand {
   /**
    * Configuration path resolved from the command's working directory.
    *
-   * Parsing supplies evidence.config.ts when no configuration option is
-   * present.
+   * Omission discovers evidence.config.ts before evidence.config.json in that
+   * directory. Only absence permits fallback; explicit paths never fall back.
    */
-  config: string;
+  config?: string;
 
   /**
    * Text or JSON representation requested for reports.

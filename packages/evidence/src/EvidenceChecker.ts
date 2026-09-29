@@ -34,16 +34,17 @@ export class EvidenceChecker {
    * Retaining a path does not retain its contents. Every invocation reloads the
    * file so edits and recovery from an earlier load failure remain observable.
    */
-  private readonly configFile: string;
+  private readonly configFile: string | undefined;
 
   /**
    * Selects the configuration file for subsequent checks.
    *
    * Construction performs no file access or parser initialization. Omission
-   * uses `evidence.config.ts`; the loader resolves the supplied path when work
-   * begins.
+   * discovers `evidence.config.ts`, then `evidence.config.json` only when the
+   * TS entry is absent. Selection happens on each invocation; an explicit path
+   * never falls back.
    */
-  public constructor(configFile: string = "evidence.config.ts") {
+  public constructor(configFile?: string) {
     this.configFile = configFile;
   }
 
@@ -65,9 +66,10 @@ export class EvidenceChecker {
    * This is the static convenience form of the instance `analyze` operation. It
    * returns captured graph context as well as the report, suitable for a
    * subsequent list, inspection, or graph export without another source load.
+   * Omission discovers TS before JSON with absence-only fallback.
    */
   public static async analyze(
-    configFile: string = "evidence.config.ts",
+    configFile?: string,
   ): Promise<IEvidenceCheckAnalysis> {
     return new EvidenceChecker(configFile).analyze();
   }
@@ -88,10 +90,11 @@ export class EvidenceChecker {
    *
    * The configuration and its selected sources are loaded for this invocation.
    * The returned report has the same status and diagnostic semantics as the
-   * instance `check` method.
+   * instance `check` method. Omission discovers TS before JSON with
+   * absence-only fallback.
    */
   public static async check(
-    configFile: string = "evidence.config.ts",
+    configFile?: string,
   ): Promise<IEvidenceCheckReport> {
     return new EvidenceChecker(configFile).check();
   }

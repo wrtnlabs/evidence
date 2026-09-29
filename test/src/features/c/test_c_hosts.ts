@@ -8,11 +8,12 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * Attaches C Doxygen evidence and rejects annotations in inert source carriers.
  *
  * Only documentation that leads an eligible declaration may satisfy evidence;
- * comments in literals or unsupported positions must remain visible failures.
+ * comments in unsupported positions must remain visible failures. Literal data
+ * contributes no annotations.
  *
  * 1. Analyze Doxygen comments before supported declarations.
  * 2. Compare the resulting declarations and attached hosts.
- * 3. Require tag-bearing inert carriers to produce unsupported-host diagnostics.
+ * 3. Require misplaced comment tags to produce unsupported-host diagnostics.
  */
 export async function test_c_hosts(): Promise<void> {
   const inventory = await new EvidenceCAdapter().analyze(
@@ -94,13 +95,13 @@ export async function test_c_hosts(): Promise<void> {
     throw new Error("Missing trailing C evidence host.");
   TestValidator.equals("C grouped object host", groupedHost.unitIds.length, 2);
 
-  // Every tag-bearing inert carrier remains visible as an unsupported host.
+  // Misplaced comment tags remain visible while expression strings are ignored.
   TestValidator.equals(
     "unsupported C annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    7,
+    6,
   );
 
   const withdrawn = await new EvidenceCAdapter().analyze(

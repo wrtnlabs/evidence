@@ -316,32 +316,6 @@ export namespace EvidenceCppSyntax {
     };
   }
 
-  export function string(
-    node: EvidenceNode,
-  ): IEvidenceCommentSyntax | undefined {
-    if (node.type === "string_literal") {
-      const opening = /^(?:u8|u|U|L)?"/u.exec(node.text)?.[0];
-      return opening === undefined
-        ? undefined
-        : {
-            opening,
-            closing: '"',
-            tagBoundaries: true,
-            allowWithdrawal: false,
-          };
-    }
-    if (node.type !== "raw_string_literal") return undefined;
-    const opening = /^(?:u8|u|U|L)?R"([^ ()\\\t\r\n]*)\(/u.exec(node.text);
-    return opening === null
-      ? undefined
-      : {
-          opening: opening[0],
-          closing: `)${opening[1] ?? ""}"`,
-          tagBoundaries: true,
-          allowWithdrawal: false,
-        };
-  }
-
   function childDeclarator(node: EvidenceNode): EvidenceNode | null {
     return node.childForFieldName("declarator") ?? declaratorChild(node);
   }

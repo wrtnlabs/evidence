@@ -433,18 +433,6 @@ export class EvidenceJavaFileScanner {
       const documentation = this.ensureDocumentation(range, syntax);
       this.carrierDocumentation.set(this.nodeKey(comment), documentation);
     }
-
-    const literals = [...this.session.root.descendantsOfType("string_literal")];
-    for (const literal of literals) {
-      const syntax = EvidenceJavaSyntax.string(literal);
-      if (syntax === undefined) continue;
-      const raw = literal.text.slice(
-        syntax.opening.length,
-        literal.text.length - syntax.closing.length,
-      );
-      if (this.annotation(raw))
-        this.ensureDocumentation(this.session.range(literal), syntax);
-    }
   }
 
   private attach(

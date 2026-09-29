@@ -64,26 +64,6 @@ export namespace EvidenceGoSyntax {
     };
   }
 
-  export function literal(
-    node: EvidenceNode,
-  ): IEvidenceCommentSyntax | undefined {
-    if (node.type === "interpreted_string_literal")
-      return {
-        opening: '"',
-        closing: '"',
-        tagBoundaries: true,
-        allowWithdrawal: false,
-      };
-    if (node.type === "raw_string_literal")
-      return {
-        opening: "`",
-        closing: "`",
-        tagBoundaries: true,
-        allowWithdrawal: false,
-      };
-    return undefined;
-  }
-
   function typeName(node: EvidenceNode | null): string | undefined {
     if (node === null) return undefined;
     const direct = name(node);

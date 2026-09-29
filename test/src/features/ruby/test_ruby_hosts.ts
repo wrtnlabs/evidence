@@ -13,7 +13,7 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  *    literal, inline, private, detached, and commented-out tagged carriers.
  * 2. Require only supported carriers to produce declarations and require one
  *    attribute host to own both generated public properties.
- * 3. Require all unsupported annotation carriers to remain diagnosable.
+ * 3. Require misplaced comment annotations to remain diagnosable and ignore data.
  */
 export async function test_ruby_hosts(): Promise<void> {
   const inventory = await new EvidenceRubyAdapter().analyze(
@@ -82,13 +82,13 @@ export async function test_ruby_hosts(): Promise<void> {
   if (host === undefined) throw new Error("Missing Ruby attribute host.");
   TestValidator.equals("Ruby grouped attribute host", host.unitIds.length, 2);
 
-  // Body comments, strings, heredocs, private and detached comments stay observable.
+  // Body, private and detached comments stay observable; strings are inert data.
   TestValidator.equals(
     "unsupported Ruby annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    7,
+    5,
   );
 
   const withdrawn = await new EvidenceRubyAdapter().analyze(

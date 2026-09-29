@@ -82,8 +82,9 @@ export class EvidenceConfigDependencyScanner {
    * Scans the configuration and every statically reachable local module.
    *
    * Parser resources close on both success and failure, while already
-   * discovered dependencies remain available through `list` for watch
-   * recovery.
+   * discovered dependencies remain available through `list` for watch recovery.
+   * Data configuration entries have no executable module scope and do not read
+   * package metadata.
    */
   public async scan(): Promise<IEvidenceSourceDependency[]> {
     try {
@@ -97,7 +98,10 @@ export class EvidenceConfigDependencyScanner {
       );
       this.watch(physical, false);
       this.watch(EvidenceSourcePath.slash(path.dirname(physical)), true);
-      this.configMode = await this.moduleMode(physical);
+      // Only executable modules need package scope to choose import semantics.
+      // JSON loading cannot fail because unrelated package metadata is malformed.
+      if (programmingType(physical) !== undefined)
+        this.configMode = await this.moduleMode(physical);
       await this.scanFile(logical);
       return this.list();
     } finally {

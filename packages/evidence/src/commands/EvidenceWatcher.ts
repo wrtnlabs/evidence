@@ -16,6 +16,7 @@ import type { IEvidenceWatchFailureCycle } from "../structures/IEvidenceWatchFai
 import type { IEvidenceWatchOptions } from "../structures/IEvidenceWatchOptions";
 import type { EvidenceWatchPublisher } from "../typings/EvidenceWatchPublisher";
 import { EvidenceChecker } from "../EvidenceChecker";
+import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
 
 /**
  * Rechecks active dependencies and publishes stable results in sequence.
@@ -45,12 +46,19 @@ import { EvidenceChecker } from "../EvidenceChecker";
  */
 export class EvidenceWatcher {
   /**
-   * Absolute configuration anchor captured before observation begins.
+   * Explicit absolute configuration anchor captured before observation begins.
    *
-   * Later changes to process cwd cannot redirect configuration or dependency
-   * scans.
+   * Omission retains conventional discovery rather than becoming an explicit TS
+   * path. Explicit paths do not fall back after deletion or failure.
    */
-  private readonly configFile: string;
+  private readonly configFile: string | undefined;
+
+  /**
+   * Working directory captured for all configuration discovery attempts.
+   *
+   * Later process cwd changes cannot redirect selection or dependency scans.
+   */
+  private readonly cwd: string;
 
   /**
    * Interval between dependency snapshots during idle observation.
@@ -130,18 +138,23 @@ export class EvidenceWatcher {
    *
    * Construction prepares fallback dependencies but does not evaluate
    * configuration or start polling. Omitted timing options use the documented
-   * watch defaults.
+   * watch defaults. Omitted configuration paths discover TS before JSON on
+   * every evaluation, and candidate changes remain watched after failures.
    */
   public constructor(
-    configFile: string = "evidence.config.ts",
+    configFile: string | undefined = undefined,
     options: IEvidenceWatchOptions = {},
   ) {
-    const checked = typia.assert(options);
-    this.configFile = path.resolve(configFile);
+    const checked: IEvidenceWatchOptions = typia.assert(options);
+    this.cwd = path.resolve(checked.cwd ?? process.cwd());
+    this.configFile =
+      configFile === undefined ? undefined : path.resolve(this.cwd, configFile);
     this.pollIntervalMilliseconds = checked.pollIntervalMilliseconds ?? 250;
     this.debounceMilliseconds = checked.debounceMilliseconds ?? 100;
     this.parserRetryMilliseconds = checked.parserRetryMilliseconds ?? 5_000;
-    this.active = configurationFallback(this.configFile);
+    this.active = configurationFallback(
+      this.configFile ?? path.join(this.cwd, "evidence.config.ts"),
+    );
   }
 
   /**
@@ -256,7 +269,7 @@ export class EvidenceWatcher {
         return {
           cycle: failureCycle(
             this.cycles + 1,
-            this.configFile,
+            this.configFile ?? path.join(this.cwd, "evidence.config.ts"),
             new Error("The Evidence Graph watcher was closed."),
           ),
           dependencies: this.active,
@@ -264,7 +277,8 @@ export class EvidenceWatcher {
           retryParser: false,
         };
       }
-      const beforeConfig = await scanConfiguration(this.configFile);
+      const beforeConfig: IEvidenceConfigDependencyScan =
+        await scanConfiguration(this.configFile, this.cwd);
       const candidates = EvidenceWatchDependencySet.merge(
         this.active,
         beforeConfig.dependencies,
@@ -274,31 +288,36 @@ export class EvidenceWatcher {
       let analysis: IEvidenceCheckAnalysis | undefined;
       let analysisCause: unknown;
       try {
-        analysis = await EvidenceChecker.analyze(this.configFile);
+        if (beforeConfig.configFile === undefined) throw beforeConfig.cause;
+        analysis = await EvidenceChecker.analyze(beforeConfig.configFile);
       } catch (cause) {
         analysisCause = cause;
       }
-      const afterConfig = await scanConfiguration(this.configFile);
+      const afterConfig: IEvidenceConfigDependencyScan =
+        await scanConfiguration(this.configFile, this.cwd);
       const scanCause = afterConfig.cause;
       const cause = analysisCause ?? scanCause;
       // A failed evaluation cannot replace the previous dependency set with a
       // smaller partial discovery, or repairing a lost input might never wake us.
-      const active =
-        analysis === undefined
-          ? EvidenceWatchDependencySet.merge(
-              this.active,
-              afterConfig.dependencies,
-            )
-          : cause === undefined
-            ? EvidenceWatchDependencySet.analysis(
-                analysis,
-                afterConfig.dependencies,
-              )
-            : EvidenceWatchDependencySet.merge(
+      const active: IEvidenceSourceDependency[] =
+        EvidenceWatchDependencySet.merge(
+          configurationCandidates(this.configFile, this.cwd),
+          analysis === undefined
+            ? EvidenceWatchDependencySet.merge(
                 this.active,
                 afterConfig.dependencies,
-                EvidenceWatchDependencySet.analysis(analysis, []),
-              );
+              )
+            : cause === undefined
+              ? EvidenceWatchDependencySet.analysis(
+                  analysis,
+                  afterConfig.dependencies,
+                )
+              : EvidenceWatchDependencySet.merge(
+                  this.active,
+                  afterConfig.dependencies,
+                  EvidenceWatchDependencySet.analysis(analysis, []),
+                ),
+        );
 
       const retryParser =
         parserFailure(cause) ||
@@ -317,7 +336,10 @@ export class EvidenceWatcher {
       );
       // Compare the same pre-analysis boundary. A report built across two source
       // versions must be retried rather than published as a stable cycle.
-      if (!before.equals(after.select(candidates))) {
+      if (
+        beforeConfig.configFile !== afterConfig.configFile ||
+        !before.equals(after.select(candidates))
+      ) {
         this.active = active;
         continue;
       }
@@ -326,7 +348,13 @@ export class EvidenceWatcher {
       const cycle =
         analysis !== undefined && cause === undefined
           ? checkCycle(number, analysis)
-          : failureCycle(number, this.configFile, cause);
+          : failureCycle(
+              number,
+              beforeConfig.configFile ??
+                this.configFile ??
+                path.join(this.cwd, "evidence.config.ts"),
+              cause,
+            );
       return {
         cycle,
         dependencies: active,
@@ -400,14 +428,62 @@ export class EvidenceWatcher {
  * only the exception would discard the scanner's partial dependency knowledge.
  */
 async function scanConfiguration(
-  configFile: string,
+  configFile: string | undefined,
+  cwd: string,
 ): Promise<IEvidenceConfigDependencyScan> {
-  const scanner = new EvidenceConfigDependencyScanner(configFile);
+  const candidates: IEvidenceSourceDependency[] = configurationCandidates(
+    configFile,
+    cwd,
+  );
+  let selected: string;
   try {
-    return { dependencies: await scanner.scan() };
-  } catch (cause) {
-    return { dependencies: scanner.list(), cause };
+    selected = await EvidenceConfigLoader.locate(configFile, cwd);
+  } catch (cause: unknown) {
+    return { dependencies: candidates, cause };
   }
+  const scanner: EvidenceConfigDependencyScanner =
+    new EvidenceConfigDependencyScanner(selected);
+  try {
+    return {
+      configFile: selected,
+      dependencies: EvidenceWatchDependencySet.merge(
+        candidates,
+        await scanner.scan(),
+      ),
+    };
+  } catch (cause) {
+    return {
+      configFile: selected,
+      dependencies: EvidenceWatchDependencySet.merge(
+        candidates,
+        scanner.list(),
+      ),
+      cause,
+    };
+  }
+}
+
+/**
+ * Retains logical candidates independently of a selected physical config file.
+ *
+ * Symlink replacement and the appearance of a higher-priority TS entry must
+ * wake implicit discovery even after a successful JSON analysis.
+ */
+function configurationCandidates(
+  configFile: string | undefined,
+  cwd: string,
+): IEvidenceSourceDependency[] {
+  const files: string[] =
+    configFile === undefined
+      ? [
+          path.join(cwd, "evidence.config.ts"),
+          path.join(cwd, "evidence.config.json"),
+        ]
+      : [configFile];
+  return files.map((file: string): IEvidenceSourceDependency => ({
+    path: EvidenceSourcePath.slash(file),
+    recursive: false,
+  }));
 }
 
 /**

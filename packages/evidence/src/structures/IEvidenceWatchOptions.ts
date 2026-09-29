@@ -1,13 +1,21 @@
 import type { tags } from "typia";
 
 /**
- * Timing controls for dependency polling, edit settling, and parser recovery.
+ * Configuration anchor and timing controls for dependency observation.
  *
  * The watcher compares dependency snapshots and waits for a quiet period before
  * reevaluation. Parser acquisition has a separate retry clock because network
  * or cache recovery may happen without any watched filesystem change.
  */
 export interface IEvidenceWatchOptions {
+  /**
+   * Directory anchoring configuration discovery and relative explicit paths.
+   *
+   * Omission captures process cwd during construction. Subsequent cwd changes
+   * cannot redirect the watcher. Implicit selection is repeated on each cycle.
+   */
+  cwd?: string;
+
   /**
    * Positive delay between dependency snapshots, in milliseconds.
    *

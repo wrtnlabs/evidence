@@ -643,16 +643,17 @@ export class EvidenceLuaFileScanner {
    * adjacent line comments become one carrier with an extended source range.
    */
   private comments(): void {
-    const source = new EvidenceSourceText(this.source.content);
-    for (const node of this.session.root.descendantsOfType([
-      "comment",
-      "string",
-    ])) {
-      const text = node.text;
-      const long = /^--\[(=*)\[/u.exec(text);
-      const line =
+    const source: EvidenceSourceText = new EvidenceSourceText(
+      this.source.content,
+    );
+    const nodes: EvidenceNode[] =
+      this.session.root.descendantsOfType("comment");
+    for (const node of nodes) {
+      const text: string = node.text;
+      const long: RegExpExecArray | null = /^--\[(=*)\[/u.exec(text);
+      const line: boolean =
         node.type === "comment" && text.startsWith("---") && long === null;
-      const eligible = line || long !== null;
+      const eligible: boolean = line || long !== null;
       if (
         !eligible &&
         !/@(?:evidenceExcludeReview|evidenceReview|evidenceExclude|evidence|link|internal|hidden|ignore)\b/u.test(
@@ -660,8 +661,8 @@ export class EvidenceLuaFileScanner {
         )
       )
         continue;
-      const previous = node.previousNamedSibling;
-      const existing =
+      const previous: EvidenceNode | null = node.previousNamedSibling;
+      const existing: IEvidenceLuaDocumentation | undefined =
         line &&
         previous?.type === "comment" &&
         previous.text.startsWith("---") &&
@@ -678,23 +679,8 @@ export class EvidenceLuaFileScanner {
         this.documentation.set(node.startIndex, existing);
         continue;
       }
-      const opening =
-        long?.[0] ??
-        (line
-          ? "---"
-          : node.type === "comment"
-            ? "--"
-            : text.startsWith("[")
-              ? (/^\[=*\[/u.exec(text)?.[0] ?? "")
-              : (text[0] ?? ""));
-      const closing =
-        long !== null
-          ? `]${long[1] ?? ""}]`
-          : node.type === "comment"
-            ? ""
-            : opening.startsWith("[")
-              ? opening.replace(/\[/gu, "]")
-              : opening;
+      const opening: string = long?.[0] ?? (line ? "---" : "--");
+      const closing: string = long !== null ? `]${long[1] ?? ""}]` : "";
       this.documentation.set(node.startIndex, {
         id: `lua:${this.source.id}:documentation:${node.startIndex}`,
         range: this.session.range(node),

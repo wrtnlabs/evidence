@@ -91,7 +91,6 @@ export class EvidenceGoFileScanner {
           this.scanProperties(statement);
           break;
       }
-    this.collectLiteralAnnotations();
     return {
       source: this.source,
       directory: EvidenceSourcePath.slash(
@@ -335,23 +334,6 @@ export class EvidenceGoFileScanner {
     return /^[ \t]*$/u.test(this.source.content.slice(start, offset));
   }
 
-  private collectLiteralAnnotations(): void {
-    const literals = [
-      ...this.session.root.descendantsOfType("interpreted_string_literal"),
-      ...this.session.root.descendantsOfType("raw_string_literal"),
-    ];
-    for (const literal of literals) {
-      const syntax = EvidenceGoSyntax.literal(literal);
-      if (syntax === undefined) continue;
-      const raw = this.source.content.slice(
-        literal.startIndex + syntax.opening.length,
-        literal.endIndex - syntax.closing.length,
-      );
-      if (this.annotation(raw))
-        this.ensureDocumentation(this.session.range(literal), syntax);
-    }
-  }
-
   private ensureDocumentation(
     range: IEvidenceSourceRange,
     syntax: IEvidenceCommentSyntax,
@@ -368,12 +350,6 @@ export class EvidenceGoFileScanner {
       this.documentation.set(key, documentation);
     }
     return documentation;
-  }
-
-  private annotation(raw: string): boolean {
-    return /(?:^|[\r\n])[ \t]*@(evidenceExcludeReview|evidenceReview|evidenceExclude|evidence|link|internal|hidden|ignore)\b/u.test(
-      raw,
-    );
   }
 
   private nodeKey(node: EvidenceNode): string {

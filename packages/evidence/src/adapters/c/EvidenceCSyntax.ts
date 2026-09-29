@@ -158,21 +158,6 @@ export namespace EvidenceCSyntax {
     };
   }
 
-  export function string(
-    node: EvidenceNode,
-  ): IEvidenceCommentSyntax | undefined {
-    if (node.type !== "string_literal") return undefined;
-    const prefix = /^(?:u8|u|U|L)?"/u.exec(node.text)?.[0];
-    return prefix === undefined
-      ? undefined
-      : {
-          opening: prefix,
-          closing: '"',
-          tagBoundaries: true,
-          allowWithdrawal: false,
-        };
-  }
-
   function childDeclarator(node: EvidenceNode): EvidenceNode | null {
     return node.childForFieldName("declarator") ?? declaratorChild(node);
   }

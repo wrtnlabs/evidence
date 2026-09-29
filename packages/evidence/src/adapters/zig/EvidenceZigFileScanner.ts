@@ -612,15 +612,12 @@ export class EvidenceZigFileScanner {
    * diagnostics.
    */
   private collectDocumentation(): void {
-    const nodes = this.session.root.descendantsOfType([
-      "comment",
-      "string",
-      "multiline_string",
-    ]);
-    const consumed = new Set<number>();
+    const nodes: EvidenceNode[] =
+      this.session.root.descendantsOfType("comment");
+    const consumed: Set<number> = new Set<number>();
     for (const node of nodes) {
       if (consumed.has(node.startIndex)) continue;
-      const doc =
+      const doc: boolean =
         node.type === "comment" &&
         node.text.startsWith("///") &&
         !node.text.startsWith("////");
@@ -631,9 +628,9 @@ export class EvidenceZigFileScanner {
         )
       )
         continue;
-      let end = node;
+      let end: EvidenceNode = node;
       if (doc) {
-        let next = end.nextNamedSibling;
+        let next: EvidenceNode | null = end.nextNamedSibling;
         while (
           next !== null &&
           next.type === "comment" &&
@@ -648,15 +645,11 @@ export class EvidenceZigFileScanner {
           next = end.nextNamedSibling;
         }
       }
-      const opening = doc
+      const opening: string = doc
         ? "///"
-        : node.type === "comment"
-          ? node.text.startsWith("//!")
-            ? "//!"
-            : "//"
-          : node.type === "multiline_string"
-            ? "\\\\"
-            : '"';
+        : node.text.startsWith("//!")
+          ? "//!"
+          : "//";
       this.documentation.set(node.startIndex, {
         id: `zig:${this.source.id}:documentation:${node.startIndex}`,
         range: {
@@ -665,7 +658,7 @@ export class EvidenceZigFileScanner {
         },
         syntax: {
           opening,
-          closing: node.type === "string" ? '"' : "",
+          closing: "",
           ...(doc ? { linePrefix: "///" } : {}),
           tagBoundaries: true,
           allowWithdrawal: doc,

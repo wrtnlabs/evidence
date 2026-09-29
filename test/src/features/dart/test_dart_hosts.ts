@@ -20,7 +20,7 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  *    and verify their UTF-16 mapping.
  * 2. Require a hidden type's descendant to resolve hidden, preserve fingerprints
  *    for annotation edits, and change them for semantic edits.
- * 3. Reject every unsupported tag carrier and every supported Dart string
+ * 3. Reject every unsupported comment carrier and ignore every Dart string
  *    delimiter as an annotation host.
  */
 export async function test_dart_hosts(): Promise<void> {
@@ -154,9 +154,9 @@ export async function test_dart_hosts(): Promise<void> {
       [],
     );
     TestValidator.equals(
-      `${delimiter} literal diagnostic`,
+      `${delimiter} literal data is inert`,
       unsupported.diagnostics.map((diagnostic) => diagnostic.code),
-      ["unsupported-annotation-host"],
+      [],
     );
   }
 }

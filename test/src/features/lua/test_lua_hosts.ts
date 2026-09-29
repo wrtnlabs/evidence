@@ -94,11 +94,7 @@ export async function test_lua_hosts(): Promise<void> {
   TestValidator.equals(
     "unsupported carriers are diagnosed",
     unsupported.diagnostics.map((diagnostic) => diagnostic.code),
-    [
-      "unsupported-annotation-host",
-      "unsupported-annotation-host",
-      "unsupported-annotation-host",
-    ],
+    ["unsupported-annotation-host", "unsupported-annotation-host"],
   );
   const unsupportedSource = unsupported.sources[0];
   if (unsupportedSource === undefined)
@@ -118,7 +114,7 @@ export async function test_lua_hosts(): Promise<void> {
   if (publicFunction === undefined)
     throw new Error("Public string-returning function is missing.");
   TestValidator.notEquals(
-    "unsupported tag-looking strings remain semantic content",
+    "tag-shaped strings remain semantic content",
     EvidenceFingerprint.inspect(unsupported, publicFunction.id).fingerprint,
     EvidenceFingerprint.inspect(changedLiteral, publicFunction.id).fingerprint,
   );

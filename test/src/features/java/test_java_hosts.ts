@@ -101,13 +101,13 @@ export async function test_java_hosts(): Promise<void> {
     2,
   );
 
-  // Ordinary comments, strings, and text blocks remain visible as unsupported hosts.
+  // Unsupported comment positions remain diagnosable; strings remain data.
   TestValidator.equals(
     "unsupported Java annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    4,
+    2,
   );
 
   const withdrawn = await new EvidenceJavaAdapter().analyze(

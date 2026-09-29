@@ -457,8 +457,8 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        // Both the first body comment and returned string are unsupported carriers.
-        unsupportedAnnotations: 2,
+        // The body comment remains unsupported; the returned string is runtime data.
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "prototype", "run"]),
@@ -547,7 +547,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "Run"]),
@@ -639,7 +639,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -851,7 +851,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -960,7 +960,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -1069,7 +1069,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -1174,7 +1174,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -1383,7 +1383,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -1468,7 +1468,7 @@ export namespace EvidenceAdapterCertificationFixtures {
         `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -1572,7 +1572,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "Run"]),
@@ -1673,7 +1673,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["run"]),
@@ -1780,7 +1780,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
@@ -1876,7 +1876,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),

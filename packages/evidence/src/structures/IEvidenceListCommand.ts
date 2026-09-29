@@ -29,10 +29,10 @@ export interface IEvidenceListCommand {
   /**
    * Configuration path relative to the resolved command directory.
    *
-   * Parsing uses evidence.config.ts when the caller does not supply an
-   * override.
+   * Omission discovers evidence.config.ts before evidence.config.json. A
+   * selected invalid file or an explicit path never falls back.
    */
-  config: string;
+  config?: string;
 
   /**
    * Text or JSON representation of the discovery report.

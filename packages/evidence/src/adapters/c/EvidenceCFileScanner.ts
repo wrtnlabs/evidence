@@ -610,21 +610,6 @@ export class EvidenceCFileScanner {
       for (const comment of sequence)
         this.carrierDocumentation.set(this.nodeKey(comment), documentation);
     }
-
-    for (const literal of this.session.root.descendantsOfType(
-      "string_literal",
-    )) {
-      const syntax = EvidenceCSyntax.string(literal);
-      if (syntax === undefined) continue;
-      const range = this.session.range(literal);
-      const raw = EvidenceDocumentation.read(
-        this.source.content,
-        "c-probe",
-        range,
-        syntax,
-      ).text;
-      if (this.annotation(raw)) this.ensureDocumentation(range, syntax);
-    }
   }
 
   private lineFamily(node: EvidenceNode): string {
