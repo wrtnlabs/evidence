@@ -139,7 +139,8 @@ export async function test_config_discovery(): Promise<void> {
         );
       }
       await EvidenceTestFileSystem.erase(join(project, "evidence.config.ts"));
-      for (const path of ["evidence.config.ts", "missing.json"])
+      const missingPaths: string[] = ["evidence.config.ts", "missing.json"];
+      for (const path of missingPaths)
         TestValidator.equals(
           "explicit missing path",
           (
