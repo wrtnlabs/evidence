@@ -1,7 +1,7 @@
 import type { tags } from "typia";
 
 /**
- * Timing controls for dependency polling, edit settling, and parser recovery.
+ * Configuration anchor and timing controls for dependency observation.
  *
  * The watcher compares dependency snapshots and waits for a quiet period before
  * reevaluation. Parser acquisition has a separate retry clock because network
