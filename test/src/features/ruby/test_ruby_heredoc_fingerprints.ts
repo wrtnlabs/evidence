@@ -125,7 +125,8 @@ export async function test_ruby_heredoc_fingerprints(): Promise<void> {
     "Real documentation.",
     "\r\n",
   );
-  for (const name of [...names, "Data"])
+  const normalizedNames: string[] = [...names, "Data"];
+  for (const name of normalizedNames)
     TestValidator.equals(
       `${name} CRLF normalization`,
       fingerprint(original, name),
