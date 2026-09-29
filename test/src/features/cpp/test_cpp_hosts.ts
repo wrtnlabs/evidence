@@ -103,13 +103,13 @@ export async function test_cpp_hosts(): Promise<void> {
     throw new Error("Missing trailing C++ evidence host.");
   TestValidator.equals("C++ grouped field host", groupedHost.unitIds.length, 2);
 
-  // Every tag-bearing non-Doxygen or unsupported placement stays observable.
+  // Non-Doxygen and misplaced comments stay observable; literal data is ignored.
   TestValidator.equals(
     "unsupported C++ annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    7,
+    5,
   );
 
   const withdrawn = await new EvidenceCppAdapter().analyze(

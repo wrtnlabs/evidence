@@ -1367,19 +1367,6 @@ export class EvidenceCppFileScanner {
       for (const comment of sequence)
         this.carrierDocumentation.set(this.nodeKey(comment), documentation);
     }
-    for (const type of ["string_literal", "raw_string_literal"])
-      for (const literal of this.session.root.descendantsOfType(type)) {
-        const syntax = EvidenceCppSyntax.string(literal);
-        if (syntax === undefined) continue;
-        const range = this.session.range(literal);
-        const raw = EvidenceDocumentation.read(
-          this.source.content,
-          "cpp-probe",
-          range,
-          syntax,
-        ).text;
-        if (this.annotation(raw)) this.ensureDocumentation(range, syntax);
-      }
   }
 
   private lineFamily(node: EvidenceNode): string {
