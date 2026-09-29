@@ -112,7 +112,7 @@ export namespace EvidenceLuaCertificationFixture {
       `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: {
         unit: "function:module.run",
