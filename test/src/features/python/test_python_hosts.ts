@@ -15,7 +15,7 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * 2. Verify only ordinary, concatenated, and decorator-adjacent documentation
  *    produces declarations and their expected hosts.
  * 3. Verify assigned strings, f-strings, and detached comments do not acknowledge
- *    declarations and report the exercised unsupported cases.
+ *    declarations; only the detached comment produces a host diagnostic.
  */
 export async function test_python_hosts(): Promise<void> {
   const inventory = await new EvidencePythonAdapter().analyze(
@@ -89,13 +89,13 @@ export async function test_python_hosts(): Promise<void> {
     ],
   );
 
-  // Tag-shaped assigned strings and blank-line-detached comments remain visible failures.
+  // The detached comment remains a failure; assigned strings and f-strings are data.
   TestValidator.equals(
     "unsupported Python annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    3,
+    1,
   );
 }
 

@@ -457,8 +457,8 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        // Both the first body comment and returned string are unsupported carriers.
-        unsupportedAnnotations: 2,
+        // The body comment remains unsupported; the returned string is runtime data.
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "prototype", "run"]),

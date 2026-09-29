@@ -119,13 +119,6 @@ export class EvidencePythonFileScanner {
   private readonly reported = new Set<string>();
 
   /**
-   * Tracks string ranges already consumed as a concatenated docstring.
-   *
-   * This prevents adjacent string literals from producing overlapping mappings.
-   */
-  private readonly docstringParts = new Set<string>();
-
-  /**
    * Converts parser offsets into source ranges for units and documentation.
    *
    * The scanner owns this helper because all returned records must outlive
@@ -163,6 +156,7 @@ export class EvidencePythonFileScanner {
    * order.
    */
   public scan(): IEvidencePythonFileAnalysis {
+    this.collectModuleDocstring();
     const statements = this.session.root.namedChildren.filter(
       (statement) => statement.type !== "comment",
     );
@@ -199,7 +193,6 @@ export class EvidencePythonFileScanner {
             );
       }
     }
-    this.collectStringAnnotations();
     return {
       source: this.source,
       all: this.all,
@@ -990,7 +983,6 @@ export class EvidencePythonFileScanner {
     if (value === undefined) return;
     const parts = EvidencePythonSyntax.docstringParts(value);
     if (parts === undefined) return;
-    for (const part of parts) this.docstringParts.add(this.nodeKey(part));
     const documentation =
       parts.length === 1
         ? this.ensureStringDocumentation(value)
@@ -1006,6 +998,25 @@ export class EvidencePythonFileScanner {
       siteId,
       unitId,
     );
+  }
+
+  /**
+   * Retains actual module documentation without inventing a declaration host.
+   *
+   * A module docstring is documentation even though modules are not selected
+   * declaration units. Tags there remain unsupported-host findings, whereas
+   * assigned strings and later expression strings remain implementation data.
+   */
+  private collectModuleDocstring(): void {
+    const value: EvidenceNode | undefined = EvidencePythonSyntax.docstring(
+      this.session.root,
+    );
+    if (value === undefined) return;
+    const parts: EvidenceNode[] | undefined =
+      EvidencePythonSyntax.docstringParts(value);
+    if (parts === undefined) return;
+    if (parts.length === 1) this.ensureStringDocumentation(value);
+    else this.ensureConcatenatedDocumentation(value, parts);
   }
 
   /**
@@ -1082,24 +1093,6 @@ export class EvidencePythonFileScanner {
   }
 
   /**
-   * Finds string literals that carry Evidence annotation tags.
-   *
-   * Tagged literals are retained even when they are not attachable docstrings.
-   */
-  private collectStringAnnotations(): void {
-    for (const string of this.session.root.descendantsOfType("string")) {
-      if (this.docstringParts.has(this.nodeKey(string))) continue;
-      const syntax = EvidencePythonSyntax.stringSyntax(string);
-      if (syntax === undefined) continue;
-      const raw = this.source.content.slice(
-        string.startIndex + syntax.opening.length,
-        string.endIndex - syntax.closing.length,
-      );
-      if (this.annotation(raw)) this.ensureDocumentation(string, syntax);
-    }
-  }
-
-  /**
    * Creates or returns documentation for one string literal range.
    *
    * Mapping identity is derived from the stable source range.
@@ -1116,7 +1109,8 @@ export class EvidencePythonFileScanner {
   /**
    * Creates documentation for adjacent string literals forming one docstring.
    *
-   * Consumed parts are remembered to avoid overlapping documentation mappings.
+   * Each part contributes original offsets to one combined documentation
+   * mapping.
    */
   private ensureConcatenatedDocumentation(
     node: EvidenceNode,
@@ -1499,18 +1493,6 @@ export class EvidencePythonFileScanner {
    */
   private private(name: string): boolean {
     return name.startsWith("_");
-  }
-
-  /**
-   * Checks whether raw comment or string text contains an Evidence tag.
-   *
-   * Tagged carriers are retained even when ordinary documentation attachment
-   * fails.
-   */
-  private annotation(raw: string): boolean {
-    return /(?:^|[\r\n])[ \t]*(?:#[ \t]*)?@(evidenceExcludeReview|evidenceReview|evidenceExclude|evidence|link|internal|hidden|ignore)\b/u.test(
-      raw,
-    );
   }
 
   /**
