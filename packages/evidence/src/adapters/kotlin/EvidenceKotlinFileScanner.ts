@@ -638,13 +638,13 @@ export class EvidenceKotlinFileScanner {
    * it.
    */
   private collectDocumentation(): void {
-    for (const node of this.session.root.descendantsOfType([
+    const nodes: EvidenceNode[] = this.session.root.descendantsOfType([
       "block_comment",
       "line_comment",
-      "string_literal",
-      "multiline_string_literal",
-    ])) {
-      const kdoc = node.type === "block_comment" && node.text.startsWith("/**");
+    ]);
+    for (const node of nodes) {
+      const kdoc: boolean =
+        node.type === "block_comment" && node.text.startsWith("/**");
       if (
         !kdoc &&
         !/@(?:evidenceExcludeReview|evidenceReview|evidenceExclude|evidence|link|internal|hidden|ignore)\b/u.test(
@@ -652,24 +652,11 @@ export class EvidenceKotlinFileScanner {
         )
       )
         continue;
-      const opening =
-        node.type === "block_comment"
-          ? kdoc
-            ? "/**"
-            : "/*"
-          : node.type === "line_comment"
-            ? "//"
-            : node.text.startsWith('"""')
-              ? '"""'
-              : '"';
+      const opening: string =
+        node.type === "block_comment" ? (kdoc ? "/**" : "/*") : "//";
       const syntax: IEvidenceCommentSyntax = {
         opening,
-        closing:
-          node.type === "block_comment"
-            ? "*/"
-            : node.type === "line_comment"
-              ? ""
-              : opening,
+        closing: node.type === "block_comment" ? "*/" : "",
         ...(node.type === "block_comment" ? { linePrefix: "*" } : {}),
         tagBoundaries: true,
         allowWithdrawal: kdoc,
