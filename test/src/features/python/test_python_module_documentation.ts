@@ -32,7 +32,8 @@ export async function test_python_module_documentation(): Promise<void> {
     'Value = "@evidence requirements.md#data Assigned data."',
     'Value = 1\n"@evidence requirements.md#data Later expression data."',
   ];
-  for (const prefix of [...documentation, ...data]) {
+  const prefixes: string[] = [...documentation, ...data];
+  for (const prefix of prefixes) {
     const inventory: IEvidenceInventory =
       await new EvidencePythonAdapter().analyze(
         EvidenceTestSourceSnapshot.create(
