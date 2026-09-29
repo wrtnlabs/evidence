@@ -773,23 +773,6 @@ export class EvidenceRustFileScanner {
       );
       this.carrierDocumentation.set(this.nodeKey(attribute), documentation);
     }
-
-    const literals = [
-      ...this.session.root.descendantsOfType("string_literal"),
-      ...this.session.root.descendantsOfType("raw_string_literal"),
-    ];
-    for (const literal of literals) {
-      const key = `${literal.startIndex}:${literal.endIndex}`;
-      if (this.documentation.has(key)) continue;
-      const syntax = EvidenceRustSyntax.string(literal);
-      if (syntax === undefined) continue;
-      const raw = this.source.content.slice(
-        literal.startIndex + syntax.opening.length,
-        literal.endIndex - syntax.closing.length,
-      );
-      if (this.annotation(raw))
-        this.ensureDocumentation(this.session.range(literal), syntax);
-    }
   }
 
   private inspectAttributes(

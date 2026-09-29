@@ -12,8 +12,8 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * 1. Analyze outer and inner doc comments, doc string attributes, inert rustdoc
  *    metadata, and tagged ordinary comments, literals, and commented-out code.
  * 2. Require eligible carriers to attach to their module or public declarations.
- * 3. Require unsupported carriers to remain visible as diagnostics and inherited
- *    withdrawal to hide a documented module hierarchy.
+ * 3. Ignore literal data, require unsupported comments to remain diagnostics and
+ *    inherited withdrawal to hide a documented module hierarchy.
  */
 export async function test_rust_hosts(): Promise<void> {
   const inventory = await new EvidenceRustAdapter().analyze(
@@ -84,13 +84,13 @@ export async function test_rust_hosts(): Promise<void> {
     ],
   );
 
-  // Ordinary comments, body comments, literals, and commented code stay visible.
+  // Ordinary comments, body comments and commented code remain visible failures.
   TestValidator.equals(
     "unsupported Rust annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    5,
+    3,
   );
   TestValidator.equals(
     "inert Rustdoc metadata",
