@@ -12,7 +12,7 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  *
  * 1. Analyze supported Go doc positions.
  * 2. Compare attached hosts.
- * 3. Reject annotations in inert carriers.
+ * 3. Reject misplaced comment annotations and ignore literal data.
  */
 export async function test_go_hosts(): Promise<void> {
   const inventory = await new EvidenceGoAdapter().analyze(
@@ -93,13 +93,13 @@ export async function test_go_hosts(): Promise<void> {
     ["Name", "Version"],
   );
 
-  // Detached comments, body comments, literals, and commented-out code stay visible.
+  // Detached comments, body comments and commented-out code remain diagnosable.
   TestValidator.equals(
     "unsupported Go annotation count",
     inventory.diagnostics.filter(
       (diagnostic) => diagnostic.code === "unsupported-annotation-host",
     ).length,
-    5,
+    3,
   );
 
   const withdrawn = await new EvidenceGoAdapter().analyze(
