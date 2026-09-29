@@ -83,17 +83,4 @@ export namespace EvidenceJavaSyntax {
       ...(javadoc ? { linePrefix: "*" } : {}),
     };
   }
-
-  export function string(
-    node: EvidenceNode,
-  ): IEvidenceCommentSyntax | undefined {
-    if (node.type !== "string_literal") return undefined;
-    const delimiter = node.text.startsWith('"""') ? '"""' : '"';
-    return {
-      opening: delimiter,
-      closing: delimiter,
-      tagBoundaries: true,
-      allowWithdrawal: false,
-    };
-  }
 }

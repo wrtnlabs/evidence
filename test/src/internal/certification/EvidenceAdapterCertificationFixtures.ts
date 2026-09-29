@@ -851,7 +851,7 @@ export namespace EvidenceAdapterCertificationFixtures {
           `,
         },
         attachedTarget: "docs/requirements.md#attached",
-        unsupportedAnnotations: 2,
+        unsupportedAnnotations: 1,
       },
       mutation: mutation(
         key("function", ["Contract", "run"]),
