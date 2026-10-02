@@ -37,6 +37,8 @@ export async function test_zig_boundaries(): Promise<void> {
       "zig-type-producing-function",
     ],
     ['pub const Imported = @import("other.zig");', "zig-inferred-surface"],
+    ['pub const Root = @import("root");', "zig-inferred-surface"],
+    ["pub const Dynamic = @import(module_name);", "zig-inferred-surface"],
     ['pub usingnamespace @import("other.zig");', "zig-usingnamespace"],
     [
       'usingnamespace @import("other.zig"); pub const Alias = Imported;',

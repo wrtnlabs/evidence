@@ -31,4 +31,13 @@ export interface IEvidenceEcmaScriptResolution {
    * export cycle that must be reported instead of silently publishing nothing.
    */
   cyclic: boolean;
+
+  /**
+   * Whether a lookup reaches foreign forwarding without a local declaration.
+   *
+   * Omission means no dependency forwarding was encountered. Local barrels
+   * propagate this state so an external star cannot fabricate a missing local
+   * binding, while explicit Evidence citations still require an enrolled unit.
+   */
+  foreign?: boolean;
 }

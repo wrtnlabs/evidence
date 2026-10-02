@@ -454,8 +454,8 @@ export class EvidenceScalaFileScanner {
   /**
    * Records supported named exports from selected singleton objects.
    *
-   * Imports, wildcard selectors, givens, unqualified paths, and dynamic
-   * selectors report incomplete resolution rather than creating aliases.
+   * Resolution distinguishes foreign forwarding from selected local aliases.
+   * Unsupported local selectors remain incomplete instead of losing owners.
    */
   private export(
     node: EvidenceNode,
@@ -463,16 +463,8 @@ export class EvidenceScalaFileScanner {
     owner: IEvidenceScalaDeclaration | undefined,
   ): void {
     if (owner?.public === false) return;
-    if (
-      this.session.root.descendantsOfType("import_declaration").length !== 0
-    ) {
-      this.problem(
-        "export-resolution",
-        "Exports in files with imports require import and shadowing resolution.",
-        node,
-      );
-      return;
-    }
+    const imported: boolean =
+      this.session.root.descendantsOfType("import_declaration").length !== 0;
     const path = node
       .childrenForFieldName("path")
       .filter((child) => child.isNamed);
@@ -482,17 +474,23 @@ export class EvidenceScalaFileScanner {
     const renamed = node.namedChildren.find(
       (child) => child.type === "as_renamed_identifier",
     );
+    const wildcard: EvidenceNode | undefined = node.namedChildren.find(
+      (child: EvidenceNode): boolean => child.type === "namespace_wildcard",
+    );
     const names =
       selectors?.namedChildren ??
-      (renamed === undefined ? path.slice(-1) : [renamed]);
+      (wildcard !== undefined
+        ? [wildcard]
+        : renamed === undefined
+          ? path.slice(-1)
+          : [renamed]);
     const qualifier = (
-      selectors === undefined && renamed === undefined
+      selectors === undefined && renamed === undefined && wildcard === undefined
         ? path.slice(0, -1)
         : path
     ).map((part) => this.name(part));
     if (
       qualifier.length === 0 ||
-      node.descendantsOfType(["namespace_wildcard", "wildcard"]).length !== 0 ||
       node.children.some((child) => child.text === "given")
     ) {
       this.problem(
@@ -514,7 +512,12 @@ export class EvidenceScalaFileScanner {
       if (
         member === undefined ||
         alias === undefined ||
-        !["identifier", "operator_identifier"].includes(member.type) ||
+        ![
+          "identifier",
+          "operator_identifier",
+          "namespace_wildcard",
+          "wildcard",
+        ].includes(member.type) ||
         alias.text === "_"
       ) {
         this.problem(
@@ -538,7 +541,13 @@ export class EvidenceScalaFileScanner {
       const paths: string[][] = [];
       for (let length = scope.length; length >= 0; --length)
         paths.push([...scope.slice(0, length), ...qualifier]);
-      this.exports.push({ declaration, paths, member: this.name(member) });
+      this.exports.push({
+        declaration,
+        paths,
+        qualifierLength: qualifier.length,
+        member: this.name(member),
+        imported,
+      });
     }
   }
 

@@ -4,7 +4,10 @@ import {
 } from "@wrtnlabs/evidence";
 import type {
   IEvidenceHost,
+  IEvidenceInventory,
+  IEvidenceUnit,
   IEvidenceTargetStatement,
+  IEvidenceTargetResolution,
 } from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import { dedent } from "@typia/utils";
@@ -20,6 +23,8 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * 1. Build units with files, ancestors, aliases, and literal members.
  * 2. Resolve each supported target form.
  * 3. Verify the exact resolved unit or failure status.
+ * 4. Keep an excluded declaration outside the population through a selected
+ *    barrel; select its owner and require both original and alias resolution.
  */
 export async function test_target_resolution(): Promise<void> {
   const inventory = await new EvidenceTypeScriptAdapter().analyze(
@@ -187,7 +192,7 @@ export async function test_target_resolution(): Promise<void> {
 
   TestValidator.equals("encoded file path", encoded.status, "resolved");
 
-  // A dependency loaded for a barrel remains addressable only through selected entries.
+  // A selected barrel cannot enroll an explicitly excluded declaration owner.
   const dependencySnapshot = EvidenceTestSourceSnapshot.create(
     "src/dependency.ts",
     "export interface Dependency { value: string; }",
@@ -221,12 +226,49 @@ export async function test_target_resolution(): Promise<void> {
     dependencyIds,
   );
 
-  TestValidator.equals("selected barrel", throughEntry.status, "resolved");
+  TestValidator.equals(
+    "selected barrel does not enroll excluded owner",
+    throughEntry.status,
+    "missing-member",
+  );
   TestValidator.equals(
     "loaded dependency stays unselected",
     directDependency.status,
     "out-of-population",
   );
+
+  dependencyAddress.selected = true;
+  const selectedInventory: IEvidenceInventory =
+    await new EvidenceTypeScriptAdapter().analyze(
+      EvidenceTestSourceSnapshot.combine([
+        dependencySnapshot,
+        EvidenceTestSourceSnapshot.create(
+          "src/entry.ts",
+          'export { Dependency as PublicDependency } from "./dependency";',
+        ),
+      ]),
+    );
+  const selectedResolver: EvidenceTargetResolver = new EvidenceTargetResolver([
+    selectedInventory,
+  ]);
+  const selectedIds: string[] = selectedInventory.units.map(
+    (unit: IEvidenceUnit): string => unit.id,
+  );
+  for (const target of [
+    "../src/entry.ts#PublicDependency",
+    "../src/dependency.ts#Dependency",
+  ]) {
+    const selected: IEvidenceTargetResolution = await selectedResolver.resolve(
+      createStatement(target),
+      host,
+      selectedIds,
+    );
+    TestValidator.equals(
+      "selected owner resolves " + target,
+      selected.status,
+      "resolved",
+    );
+  }
 }
 
 function createHost(file: string): IEvidenceHost {

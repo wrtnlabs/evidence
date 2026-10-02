@@ -1,4 +1,5 @@
 import path from "node:path";
+import { EvidenceEcmaScriptModulePaths } from "./EvidenceEcmaScriptModulePaths";
 
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
 import type { IEvidencePublicAddress } from "../../structures/IEvidencePublicAddress";
@@ -126,7 +127,8 @@ export class EvidenceEcmaScriptExportResolver {
         if (
           resolution.bindings.length === 0 &&
           resolution.cyclic &&
-          !resolution.excluded
+          !resolution.excluded &&
+          resolution.foreign !== true
         )
           this.problem(
             module.source,
@@ -251,7 +253,10 @@ export class EvidenceEcmaScriptExportResolver {
           continue;
         }
         const target = this.target(module.source, imported.specifier);
-        if (target === undefined) continue;
+        if (target === undefined) {
+          output.foreign ||= this.foreign(imported.specifier);
+          continue;
+        }
         if (imported.namespace)
           this.addBinding(output.bindings, {
             sourceId: target,
@@ -263,6 +268,7 @@ export class EvidenceEcmaScriptExportResolver {
           if (
             resolved.bindings.length === 0 &&
             !resolved.excluded &&
+            resolved.foreign !== true &&
             !this.exported(target, importedName)
           )
             this.problem(
@@ -284,11 +290,15 @@ export class EvidenceEcmaScriptExportResolver {
         edge.importedName !== undefined
       ) {
         const target = this.target(module.source, edge.specifier);
-        if (target === undefined) continue;
+        if (target === undefined) {
+          output.foreign ||= this.foreign(edge.specifier);
+          continue;
+        }
         const resolved = this.resolveFrom(target, edge.importedName, visited);
         if (
           resolved.bindings.length === 0 &&
           !resolved.excluded &&
+          resolved.foreign !== true &&
           !this.exported(target, edge.importedName)
         )
           this.problem(
@@ -305,6 +315,8 @@ export class EvidenceEcmaScriptExportResolver {
           });
       } else if (edge.kind === "namespace" && edge.specifier !== undefined) {
         const target = this.target(module.source, edge.specifier);
+        if (target === undefined)
+          output.foreign ||= this.foreign(edge.specifier);
         if (target !== undefined)
           this.addBinding(output.bindings, {
             sourceId: target,
@@ -312,7 +324,10 @@ export class EvidenceEcmaScriptExportResolver {
           });
       } else if (edge.kind === "star" && edge.specifier !== undefined) {
         const target = this.target(module.source, edge.specifier);
-        if (target === undefined) continue;
+        if (target === undefined) {
+          output.foreign ||= this.foreign(edge.specifier);
+          continue;
+        }
         const resolved = this.resolveFrom(target, name, visited);
         this.mergeState(output, resolved);
         for (const binding of resolved.bindings)
@@ -410,6 +425,7 @@ export class EvidenceEcmaScriptExportResolver {
   ): void {
     output.excluded ||= resolved.excluded;
     output.cyclic ||= resolved.cyclic;
+    output.foreign ||= resolved.foreign === true;
   }
 
   /**
@@ -427,9 +443,10 @@ export class EvidenceEcmaScriptExportResolver {
   /**
    * Resolves a supported local module specifier to one selected source ID.
    *
-   * Resolution accepts physical and logical source locations but rejects
-   * package semantics, root escapes, absent files, and aliases that identify
-   * multiple physical sources. Those cases make the inventory incomplete.
+   * Resolution accepts physical and logical source locations but rejects root
+   * escapes, absent local files, and ambiguous physical aliases. Package
+   * specifiers forward foreign declarations and contribute no locally owned
+   * units, so they do not require dependency enrollment or package resolution.
    */
   private target(
     source: IEvidenceSourceFile,
@@ -438,13 +455,7 @@ export class EvidenceEcmaScriptExportResolver {
     const key = JSON.stringify([source.id, specifier]);
     if (this.targets.has(key)) return this.targets.get(key);
     const request = specifier.replaceAll("\\", "/");
-    if (!request.startsWith(".") && !this.absolute(request)) {
-      this.problem(
-        source,
-        `Package export '${specifier}' requires unsupported package-resolution semantics.`,
-        "Use a relative module inside the declared source root until package exports are supported.",
-        key,
-      );
+    if (this.foreign(request)) {
       this.targets.set(key, undefined);
       return undefined;
     }
@@ -495,6 +506,17 @@ export class EvidenceEcmaScriptExportResolver {
         );
     this.targets.set(key, target);
     return target;
+  }
+
+  /**
+   * Identifies package forwarding independently of local path resolution.
+   *
+   * This classification also travels through local barrels so foreign star
+   * exports remain outside the local owner population.
+   */
+  private foreign(specifier: string): boolean {
+    const request: string = specifier.replaceAll("\\", "/");
+    return !request.startsWith(".") && !this.absolute(request);
   }
 
   /**
@@ -552,67 +574,16 @@ export class EvidenceEcmaScriptExportResolver {
   }
 
   /**
-   * Produces TypeScript source candidates for a normalized import base.
+   * Normalizes shared source candidates for snapshot lookup.
    *
-   * JavaScript-shaped extensions map to their TypeScript declaration forms,
-   * while extensionless imports also consider supported index files.
+   * Dependency capture uses the same spellings; only the lookup key folds
+   * Windows paths so filesystem reads retain their authored capitalization.
    */
   private candidates(base: string): string[] {
-    if (this.type === "javascript") return this.javaScriptCandidates(base);
-    const extension = path.posix.extname(base).toLowerCase();
-    const without = extension === "" ? base : base.slice(0, -extension.length);
-    const files =
-      extension === ".js" || extension === ".jsx"
-        ? [without + ".ts", without + ".tsx", without + ".d.ts"]
-        : extension === ".mjs"
-          ? [without + ".mts", without + ".d.mts"]
-          : extension === ".cjs"
-            ? [without + ".cts", without + ".d.cts"]
-            : extension === ""
-              ? [
-                  base + ".ts",
-                  base + ".tsx",
-                  base + ".d.ts",
-                  base + ".mts",
-                  base + ".cts",
-                  base + ".d.mts",
-                  base + ".d.cts",
-                  path.posix.join(base, "index.ts"),
-                  path.posix.join(base, "index.tsx"),
-                  path.posix.join(base, "index.d.ts"),
-                  path.posix.join(base, "index.mts"),
-                  path.posix.join(base, "index.cts"),
-                  path.posix.join(base, "index.d.mts"),
-                  path.posix.join(base, "index.d.cts"),
-                ]
-              : [base];
-    return Array.from(new Set(files.map((file) => this.locationKey(file))));
+    return EvidenceEcmaScriptModulePaths.candidates(base, this.type).map(
+      (file: string): string => this.locationKey(file),
+    );
   }
-
-  /**
-   * Produces JavaScript source candidates for a normalized import base.
-   *
-   * Extensionless JavaScript imports may select ordinary or index modules, but
-   * explicit extensions name exactly one selected source.
-   */
-  private javaScriptCandidates(base: string): string[] {
-    const extension = path.posix.extname(base).toLowerCase();
-    const files =
-      extension === ""
-        ? [
-            base + ".js",
-            base + ".jsx",
-            base + ".mjs",
-            base + ".cjs",
-            path.posix.join(base, "index.js"),
-            path.posix.join(base, "index.jsx"),
-            path.posix.join(base, "index.mjs"),
-            path.posix.join(base, "index.cjs"),
-          ]
-        : [base];
-    return files.map((file) => this.locationKey(file));
-  }
-
   /**
    * Records one export-resolution failure and marks the inventory incomplete.
    *

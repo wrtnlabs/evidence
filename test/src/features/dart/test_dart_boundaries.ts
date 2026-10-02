@@ -9,8 +9,8 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * The adapter must not publish a smaller public surface when parts, exports,
  * augmentation, parsing, or declaration uniqueness cannot be determined.
  *
- * 1. Analyze missing parts, external and conditional exports, augmentation,
- *    malformed syntax, and duplicate declarations.
+ * 1. Analyze missing parts, invalid part URIs and conditional exports,
+ *    augmentation, malformed syntax, and duplicate declarations.
  * 2. Require the matching incomplete diagnostic and repair for each rejected case.
  * 3. Accept supported external imports and local forms, reject an unadvertised
  *    extension, and retain an unreadable-source failure.
@@ -20,8 +20,8 @@ export async function test_dart_boundaries(): Promise<void> {
   for (const [content, code] of new Map<string, string>([
     ["part 'missing.g.dart'; class Existing {}", "dart-unresolved-library"],
     ["part of missing.library; class Model {}", "dart-part-owner"],
-    ["export 'package:external/api.dart';", "dart-external-uri"],
-    ["export 'dart:core';", "dart-external-uri"],
+    ["part 'package:external/api.dart';", "dart-external-uri"],
+    ["part 'dart:core';", "dart-external-uri"],
     ["export 'a.dart' if (dart.library.io) 'b.dart';", "dart-directive-uri"],
     ["augment class Changed {}", "dart-augmentation"],
     ["class Broken {", "dart-parse-incomplete"],

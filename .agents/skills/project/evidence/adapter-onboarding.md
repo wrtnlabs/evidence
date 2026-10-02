@@ -53,7 +53,7 @@ Implement `IEvidenceAdapter.analyze(snapshot)` and return a serializable `IEvide
 
 Every object shape has a named interface in its own file. Keep reusable scanner and resolver logic outside the adapter entry class. Use named functions and asynchronous APIs where I/O or parser work permits them.
 
-The adapter must retain source-loader diagnostics, reject syntax errors as incomplete analysis, and add actionable diagnostics for every detected construct that can change the selected public denominator beyond its supported model. An empty but fully understood file may be complete. A smaller inventory produced after unresolved export, visibility, ownership, or generation behavior may not be complete.
+The adapter must retain source-loader diagnostics, report unsupported parser recovery as incomplete extraction, and add actionable diagnostics for every detected construct that can change the selected public denominator beyond its supported model. Apply the [content and failure integrity contract](SKILL.md#content-and-failure-integrity) to grammar boundaries and declaration ownership. An empty but fully understood file may be complete. A smaller inventory produced after unresolved relevant export, visibility, ownership, or generation behavior may not be complete.
 
 ## 5. Add certification fixtures
 

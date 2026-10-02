@@ -30,7 +30,7 @@ export async function test_scala_boundaries(): Promise<void> {
     "val value = new Object { def extra = 1 }",
     "object Source { class Empty }; object Forward { export Source.Empty }",
     "object Source { val value = 1 }; object Forward { export Source.* }",
-    "object Forward { export Missing.value }",
+    "object Missing {}; object Forward { export Missing.value }",
     "object Source { private val value = 1 }; object Forward { export Source.value }",
     "class Derived derives CanEqual",
     "val Some(value) = Some(1)",

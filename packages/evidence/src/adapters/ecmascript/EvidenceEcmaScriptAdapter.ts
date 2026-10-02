@@ -17,6 +17,12 @@ import type { IEvidenceEcmaScriptFileAnalysis } from "./IEvidenceEcmaScriptFileA
 import { EvidenceEcmaScriptExportResolver } from "./EvidenceEcmaScriptExportResolver";
 import { EvidenceEcmaScriptFileScanner } from "./EvidenceEcmaScriptFileScanner";
 import { EvidenceEcmaScriptModuleResolver } from "./EvidenceEcmaScriptModuleResolver";
+import { EvidenceEcmaScriptDependencyLoader } from "./EvidenceEcmaScriptDependencyLoader";
+import type { IEvidenceSourceDiagnostic } from "../../structures/IEvidenceSourceDiagnostic";
+import type { IEvidenceSourceAddress } from "../../structures/IEvidenceSourceAddress";
+import type { IEvidenceEcmaScriptModuleResolution } from "./IEvidenceEcmaScriptModuleResolution";
+import type { IEvidenceUnitSite } from "../../structures/IEvidenceUnitSite";
+import type { IEvidencePublicAddress } from "../../structures/IEvidencePublicAddress";
 import type { EvidenceEcmaScriptType } from "./EvidenceEcmaScriptType";
 
 /**
@@ -111,7 +117,7 @@ export abstract class EvidenceEcmaScriptAdapter<
       complete: input.complete && (moduleResolution?.complete ?? true),
     };
     try {
-      const analyses = await Promise.all(
+      const analyses: IEvidenceEcmaScriptFileAnalysis[] = await Promise.all(
         input.files.map((source) =>
           this.scan(
             parser,
@@ -121,6 +127,49 @@ export abstract class EvidenceEcmaScriptAdapter<
               : "esm",
           ),
         ),
+      );
+      const dependencyCount: number = input.dependencies.length;
+      await EvidenceEcmaScriptDependencyLoader.expand(
+        input,
+        analyses,
+        this.type,
+        async (
+          source: IEvidenceSourceFile,
+        ): Promise<IEvidenceEcmaScriptFileAnalysis> => {
+          const resolution: IEvidenceEcmaScriptModuleResolution | undefined =
+            this.type === "javascript"
+              ? await new EvidenceEcmaScriptModuleResolver().resolve([source])
+              : undefined;
+          if (resolution !== undefined) {
+            inventory.dependencies.push(...resolution.dependencies);
+            inventory.diagnostics.push(...resolution.diagnostics);
+            inventory.complete &&= resolution.complete;
+          }
+          return this.scan(
+            parser,
+            source,
+            resolution === undefined
+              ? "esm"
+              : (resolution.modes.get(source.id) ?? "commonjs"),
+          );
+        },
+      );
+      inventory.dependencies.push(...input.dependencies.slice(dependencyCount));
+      inventory.complete &&= input.complete;
+      inventory.diagnostics.push(
+        ...input.diagnostics
+          .slice(sourceDiagnostics.length)
+          .map(
+            (
+              diagnostic: IEvidenceSourceDiagnostic,
+            ): IEvidenceInventory["diagnostics"][number] => ({
+              code: `source-${diagnostic.code}`,
+              severity: "error",
+              message: diagnostic.message,
+              repair: `Restore access to the local ${this.name} export dependency before evaluating coverage.`,
+              location: { file: diagnostic.path },
+            }),
+          ),
       );
       for (const analysis of analyses) {
         inventory.annotationRanges.push(
@@ -143,13 +192,33 @@ export abstract class EvidenceEcmaScriptAdapter<
         input.root,
         this.type,
       ).publish();
-      inventory.units = inventory.units.filter((unit) =>
-        published.has(unit.id),
+      // Support files resolve aliases but never enroll their own declarations.
+      // Selection follows physical declaration owners, not barrel addresses.
+      const owners: Set<string> = new Set(
+        input.files
+          .filter((source: IEvidenceSourceFile): boolean =>
+            this.selected(source),
+          )
+          .map((source: IEvidenceSourceFile): string => source.physicalPath),
+      );
+      inventory.units = inventory.units.filter(
+        (unit: IEvidenceUnit): boolean =>
+          published.has(unit.id) &&
+          unit.sites.some((site: IEvidenceUnitSite): boolean =>
+            owners.has(site.file),
+          ),
+      );
+      const retained: Set<string> = new Set(
+        inventory.units.map((unit: IEvidenceUnit): string => unit.id),
+      );
+      inventory.addresses = inventory.addresses.filter(
+        (address: IEvidencePublicAddress): boolean =>
+          retained.has(address.unitId),
       );
       const stablePublished: Set<string> = this.stabilizeRuntimeUnits(
         inventory,
         analyses,
-        published,
+        retained,
       );
       this.materializeComments(inventory, analyses, stablePublished);
       return new EvidenceInventory([inventory]).snapshot();
@@ -243,7 +312,7 @@ export abstract class EvidenceEcmaScriptAdapter<
               parserError?.message ??
               `${this.name} parsing failed: ${cause instanceof Error ? cause.message : String(cause)}`,
             repair:
-              "Correct the source or add adapter support before evaluating coverage.",
+              "Ensure grammar and adapter support for the reported source construct before evaluating coverage.",
             location: {
               file: source.physicalPath,
               ...(parserError?.range === undefined
@@ -257,6 +326,22 @@ export abstract class EvidenceEcmaScriptAdapter<
     }
   }
 
+  /**
+   * Keeps owner selection separate from support-only dependency addresses.
+   *
+   * Older in-memory snapshots without addresses retain their selected status;
+   * loaded dependency files explicitly mark every address as support-only.
+   */
+  private selected(source: IEvidenceSourceFile): boolean {
+    return (
+      source.addresses.length === 0 ||
+      source.addresses.some(
+        (address: IEvidenceSourceAddress): boolean =>
+          address.selected !== false,
+      )
+    );
+  }
+
   private materializeComments(
     inventory: IEvidenceInventory,
     analyses: IEvidenceEcmaScriptFileAnalysis[],
@@ -265,6 +350,7 @@ export abstract class EvidenceEcmaScriptAdapter<
     const units = new Map(inventory.units.map((unit) => [unit.id, unit]));
     for (const analysis of analyses)
       for (const comment of analysis.comments) {
+        if (!this.selected(analysis.source)) continue;
         const attachments = comment.attachments.filter((entry) =>
           published.has(entry.unitId),
         );
@@ -296,6 +382,7 @@ export abstract class EvidenceEcmaScriptAdapter<
         const publishedAttachments = comment.attachments.filter((entry) =>
           published.has(entry.unitId),
         );
+        if (!this.selected(analysis.source)) continue;
         const attachments = publishedAttachments.filter(
           (entry) =>
             entry.withdrawalOnly !== true &&
