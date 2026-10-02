@@ -34,7 +34,7 @@ export async function test_typescript_failures(): Promise<void> {
     ["inventory-incomplete", "typescript-parse-incomplete"],
   );
 
-  // The pinned upstream grammar has not yet accepted TypeScript 5.0 type-only star exports.
+  // Supported type-only stars still require selected local dependencies.
   const typeOnlyStars = await Promise.all([
     adapter.analyze(
       EvidenceTestSourceSnapshot.create(
@@ -51,9 +51,9 @@ export async function test_typescript_failures(): Promise<void> {
   ]);
   for (const inventory of typeOnlyStars)
     TestValidator.equals(
-      "unsupported type-only star diagnostic",
+      "missing type-only star dependency diagnostic",
       inventory.diagnostics.map((diagnostic) => diagnostic.code),
-      ["inventory-incomplete", "typescript-parse-incomplete"],
+      ["inventory-incomplete", "typescript-export"],
     );
 
   const missing = await adapter.analyze(

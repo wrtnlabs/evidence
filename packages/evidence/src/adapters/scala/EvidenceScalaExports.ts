@@ -25,6 +25,23 @@ export namespace EvidenceScalaExports {
     for (const analysis of analyses)
       for (const exported of analysis.exports) {
         if (hidden.has(exported.declaration.ownerDeclarationId ?? "")) continue;
+        // A qualifier outside every selected declaration namespace forwards a
+        // foreign owner. Retain local lookup failures once any prefix is local.
+        const local: boolean = exported.paths.some((path: string[]): boolean =>
+          declarations.some(
+            (declaration: IEvidenceScalaDeclaration): boolean =>
+              declaration.syntax !== "export_declaration" &&
+              declaration.lookup.length >
+                path.length - exported.qualifierLength &&
+              declaration.lookup
+                .slice(0, path.length)
+                .every(
+                  (segment: string, index: number): boolean =>
+                    segment === path[index],
+                ),
+          ),
+        );
+        if (!local) continue;
         let owners: IEvidenceScalaDeclaration[] = [];
         for (const path of exported.paths) {
           const candidates = declarations.filter(
@@ -60,6 +77,7 @@ export namespace EvidenceScalaExports {
         );
         const target = identities.size === 1 ? targets[0] : undefined;
         if (
+          exported.imported ||
           target === undefined ||
           [
             "class_definition",

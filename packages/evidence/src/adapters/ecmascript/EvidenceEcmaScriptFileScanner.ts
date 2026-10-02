@@ -1,4 +1,5 @@
 import type { Node as EvidenceNode } from "web-tree-sitter";
+import { EvidenceTypeScriptSyntax } from "../../parsers/EvidenceTypeScriptSyntax";
 
 import type { EvidenceParseSession } from "../../parsers/EvidenceParseSession";
 import type { IEvidenceDiagnostic } from "../../structures/IEvidenceDiagnostic";
@@ -948,7 +949,10 @@ export class EvidenceEcmaScriptFileScanner {
     const specifier = EvidenceEcmaScriptSyntax.module(
       statement.childForFieldName("source"),
     );
-    const typeOnly = EvidenceEcmaScriptSyntax.token(statement, "type");
+    const typeOnly: boolean =
+      EvidenceEcmaScriptSyntax.token(statement, "type") ||
+      (this.type === "typescript" &&
+        statement.children.some(EvidenceTypeScriptSyntax.typeOnlyStar));
     const clause = statement.namedChildren.find(
       (child) => child.type === "export_clause",
     );

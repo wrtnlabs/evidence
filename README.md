@@ -382,6 +382,10 @@ Every family can be a claim and a reference and can cite every other.
 
 Programming languages and SQL dialects parse through upstream Tree-sitter grammars, Prisma through its own parser, and Swagger as JSON or YAML. Adapters run no compiler, preprocessor, macro, or build; a construct that could change the public surface and cannot be resolved makes analysis incomplete.
 
+Tree-sitter extraction failures report the checker's grammar or adapter boundary, not a verdict that the source violates its language's syntax. Incomplete extraction cannot certify coverage because it may have missed declarations.
+
+Static foreign re-exports contribute no locally owned declarations and need no duplicate acknowledgements. Local aliases preserve their declaration owners. TypeScript and JavaScript can read an excluded local barrel as a support dependency without enrolling that barrel's declarations; these support reads and missing local paths remain watched. Explicit Evidence citations still require a selected, resolvable declaration.
+
 `evidence languages` prints the shipped registry.
 
 ### 6.1. Programming languages
@@ -413,7 +417,7 @@ Every adapter maps its language onto `type`, `function`, and `property`, keeps u
 <details>
 <summary><strong>Per-language addresses and boundaries</strong></summary>
 
-- **TypeScript.** `Class.member` static, `Class.prototype.member` instance. Direct, aliased, default, star, and namespace exports resolve through relative paths; type-only exports keep type-space units. Package `exports`, path aliases, ambient modules, global augmentations, and `export =` are incomplete.
+- **TypeScript.** `Class.member` static, `Class.prototype.member` instance. Direct, aliased, default, star, and namespace exports resolve through relative paths; type-only named, star, and namespace exports keep type-space units. Package-specifier forwarding does not enroll dependency declarations or require Node package resolution. Ambient modules, global augmentations, and `export =` are incomplete; path aliases are not resolved.
 - **JavaScript.** `.js` follows the nearest `package.json` `type`. CommonJS accepts unconditional top-level `exports.x = local`, `module.exports.x = local`, and `module.exports = { x, alias: local }`; computed keys and conditional mutation are incomplete.
 - **Python.** `Class.member` static, `Class.prototype.member` instance. Static `__all__` or non-underscore declarations; docstrings or a same-indent `#` run before the declaration. Missing local sources and dynamic `__all__` are incomplete.
 - **Go.** `Type.Method`; a grouped declaration's comment hosts every member. Build tags, promoted members, and generated declarations are outside the surface.
@@ -431,7 +435,7 @@ Every adapter maps its language onto `type`, `function`, and `property`, keeps u
 - **Lua.** `contract.lua#module.run`; dot and colon methods share one address; no `type` units. Metatables and `require` are incomplete.
 - **MATLAB.** `+pkg/@Widget/Widget.m#pkg.Widget.run`; percent help after signatures or before members. `eval`, `dynamicprops`, and missing class folders are incomplete.
 - **Objective-C.** `Widget["-send:to:"]`, `["Widget(Extras)"]["-extra"]`, `["protocol(Widget)"]["-run"]`; configure `type: "objc"` explicitly. Non-guard preprocessing and Objective-C++ are incomplete.
-- **Zig.** `contract.zig#Contract.run`; quoted identifiers are literal segments. `usingnamespace`, comptime namespaces, and build options are incomplete.
+- **Zig.** `contract.zig#Contract.run`; quoted identifiers are literal segments. Literal named-package imports forward foreign owners without enrolling dependency declarations. Local `usingnamespace`, comptime namespaces, and build options are incomplete.
 
 </details>
 

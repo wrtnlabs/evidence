@@ -107,6 +107,14 @@ export class EvidenceZigFileScanner {
       const visible =
         field || node.children.some((child) => child.text === "pub");
       if (node.type === "using_namespace_declaration") {
+        const imported: EvidenceNode | undefined = node.namedChildren.find(
+          (child: EvidenceNode): boolean => child.type !== "comment",
+        );
+        if (
+          imported !== undefined &&
+          this.foreignImport(imported, body, new Set<number>())
+        )
+          continue;
         // Private namespace imports can also participate in public name lookup.
         this.problem(
           "usingnamespace",
@@ -116,6 +124,22 @@ export class EvidenceZigFileScanner {
         continue;
       }
       if (!visible) continue;
+      // A const namespace alias forwards its dependency's declarations rather
+      // than defining a new local type or property obligation.
+      if (
+        node.type === "variable_declaration" &&
+        node.children.some(
+          (child: EvidenceNode): boolean => child.type === "const",
+        ) &&
+        node.childForFieldName("type") === null
+      ) {
+        const initializer: EvidenceNode | undefined = this.initializer(node);
+        if (
+          initializer !== undefined &&
+          this.foreignImport(initializer, body, new Set<number>())
+        )
+          continue;
+      }
       if (
         ![
           "variable_declaration",
@@ -391,6 +415,73 @@ export class EvidenceZigFileScanner {
         node,
       );
     return declaration;
+  }
+
+  /**
+   * Identifies literal dependency imports and their static namespace aliases.
+   *
+   * Named packages belong to build-provided dependency namespaces. File paths,
+   * the special local root module, dynamic imports, and alias cycles retain
+   * their existing ownership boundaries instead of being treated as foreign.
+   */
+  private foreignImport(
+    node: EvidenceNode,
+    scope: EvidenceNode,
+    visited: Set<number>,
+  ): boolean {
+    if (visited.has(node.startIndex)) return false;
+    visited.add(node.startIndex);
+    if (node.type === "builtin_function") {
+      const name: EvidenceNode | undefined = node.namedChildren.find(
+        (child: EvidenceNode): boolean => child.type === "builtin_identifier",
+      );
+      const argumentsNode: EvidenceNode | undefined = node.namedChildren.find(
+        (child: EvidenceNode): boolean => child.type === "arguments",
+      );
+      const args: EvidenceNode[] =
+        argumentsNode === undefined
+          ? []
+          : argumentsNode.namedChildren.filter(
+              (child: EvidenceNode): boolean => child.type !== "comment",
+            );
+      const argument: EvidenceNode | undefined = args[0];
+      if (
+        name?.text !== "@import" ||
+        args.length !== 1 ||
+        argument?.type !== "string"
+      )
+        return false;
+      const match: RegExpExecArray | null =
+        /^"([A-Za-z_][A-Za-z0-9_-]*)"$/u.exec(argument.text);
+      return match !== null && match[1] !== "root";
+    }
+    if (node.type === "identifier") {
+      const declaration: EvidenceNode | undefined = scope.namedChildren.find(
+        (child: EvidenceNode): boolean =>
+          child.type === "variable_declaration" &&
+          this.sameName(
+            child.childForFieldName("name") ??
+              child.namedChildren.find(
+                (part: EvidenceNode): boolean => part.type === "identifier",
+              ),
+            node,
+          ),
+      );
+      const initializer: EvidenceNode | undefined =
+        declaration === undefined ? undefined : this.initializer(declaration);
+      return (
+        initializer !== undefined &&
+        this.foreignImport(initializer, scope, visited)
+      );
+    }
+    if (
+      node.type === "field_expression" ||
+      node.type === "parenthesized_expression"
+    ) {
+      const base: EvidenceNode | undefined = node.namedChildren[0];
+      return base !== undefined && this.foreignImport(base, scope, visited);
+    }
+    return false;
   }
 
   /**

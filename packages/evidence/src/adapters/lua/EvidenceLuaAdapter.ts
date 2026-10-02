@@ -123,7 +123,7 @@ export class EvidenceLuaAdapter implements IEvidenceAdapter<"lua"> {
               parserError?.message ??
               `Lua parsing failed: ${cause instanceof Error ? cause.message : String(cause)}`,
             repair:
-              "Correct the source or add adapter support before evaluating coverage.",
+              "Ensure grammar and adapter support for the reported source construct before evaluating coverage.",
             location: {
               file: source.physicalPath,
               ...(parserError?.range === undefined

@@ -123,7 +123,10 @@ export class EvidencePythonExportResolver {
               new Set<string>(),
               published,
             ) || materialized;
-        if (resolution.bindings.length === 0 || !materialized) {
+        if (
+          resolution.foreign !== true &&
+          (resolution.bindings.length === 0 || !materialized)
+        ) {
           const explicit = module.all.names.includes(name);
           this.problem(
             module.source,
@@ -234,6 +237,12 @@ export class EvidencePythonExportResolver {
       const target = this.target(module.source, binding.specifier);
       const dependency =
         target === undefined ? undefined : this.modules.get(target);
+      if (target === undefined && this.foreign(binding.specifier)) {
+        // Unknown dependency stars cannot prove that a known local owner was
+        // replaced. They supply provenance only for otherwise unowned names.
+        if (winner === undefined) winner = binding;
+        continue;
+      }
       if (dependency !== undefined && dependency.names.has(name))
         winner = binding;
     }
@@ -266,9 +275,35 @@ export class EvidencePythonExportResolver {
           };
     if (binding.specifier === undefined) return { bindings: [], cyclic: false };
     const target = this.target(module.source, binding.specifier);
-    if (target === undefined) return { bindings: [], cyclic: false };
-    if (binding.kind === "namespace")
-      return { bindings: [{ sourceId: target }], cyclic: false };
+    if (target === undefined)
+      return {
+        bindings: [],
+        cyclic: false,
+        foreign: this.foreign(binding.specifier),
+      };
+    if (binding.kind === "namespace") {
+      const dependency: IEvidencePythonModule | undefined =
+        this.modules.get(target);
+      const names: string[] =
+        dependency === undefined ? [] : Array.from(dependency.names);
+      const foreign: boolean =
+        names.length !== 0
+          ? names.every(
+              (entry: string): boolean =>
+                this.resolveFrom(target, entry, "public", visited).foreign ===
+                true,
+            )
+          : dependency !== undefined &&
+            dependency.bindings.some(
+              (entry: IEvidencePythonBinding): boolean =>
+                entry.kind === "star" &&
+                entry.specifier !== undefined &&
+                this.foreign(entry.specifier),
+            );
+      return foreign
+        ? { bindings: [], cyclic: false, foreign: true }
+        : { bindings: [{ sourceId: target }], cyclic: false };
+    }
     const importedName = binding.kind === "named" ? binding.importedName : name;
     if (importedName === undefined) return { bindings: [], cyclic: false };
     return this.resolveFrom(
@@ -368,7 +403,10 @@ export class EvidencePythonExportResolver {
       }
     }
     const target = found.size === 1 ? Array.from(found)[0] : undefined;
-    if (target === undefined)
+    if (
+      target === undefined &&
+      !(found.size === 0 && !outside && this.foreign(specifier))
+    )
       this.problem(
         source,
         outside && found.size === 0
@@ -385,6 +423,27 @@ export class EvidencePythonExportResolver {
       );
     this.targets.set(key, target);
     return target;
+  }
+
+  /**
+   * Distinguishes absent dependency packages from missing local Python modules.
+   *
+   * Absolute imports whose top-level package exists in the selected snapshot
+   * remain local, even when the requested submodule is missing. Relative
+   * imports always require local resolution.
+   */
+  private foreign(specifier: string): boolean {
+    if (!/^[A-Za-z_][A-Za-z0-9_.]*$/u.test(specifier)) return false;
+    const first: string = specifier.split(".")[0] ?? specifier;
+    const base: string = this.locationKey(
+      path.posix.join(this.root.absolute, first),
+    );
+    return !Array.from(this.locations.keys()).some(
+      (location: string): boolean =>
+        location === `${base}.py` ||
+        location === `${base}.pyi` ||
+        location.startsWith(`${base}/`),
+    );
   }
 
   /**

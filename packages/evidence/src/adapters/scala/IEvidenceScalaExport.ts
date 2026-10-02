@@ -24,9 +24,26 @@ export interface IEvidenceScalaExport {
   paths: string[][];
 
   /**
+   * Number of authored qualifier segments after any enclosing lexical prefix.
+   *
+   * Enclosing objects alone do not prove that a forwarded qualifier is local.
+   * Resolution uses this boundary to avoid classifying a foreign path as local
+   * merely because the export sits inside a selected object.
+   */
+  qualifierLength: number;
+
+  /**
    * Names the literal member requested from the resolved source object.
    *
    * Dynamic or computed exports are excluded before this record is created.
    */
   member: string;
+
+  /**
+   * Whether imports could affect the lexical qualifier lookup.
+   *
+   * Selected local targets retain the import/shadowing boundary. Foreign
+   * forwarding does not require resolving the imported dependency.
+   */
+  imported: boolean;
 }

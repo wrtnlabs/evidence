@@ -31,6 +31,24 @@ export class EvidenceRustModuleResolver {
     string,
     Map<string, IEvidenceRustExportRecord[]>
   >();
+  /**
+   * Forwarded dependency names known without enrolling dependency declarations.
+   *
+   * The export fixed point propagates these names through selected local
+   * barrels independently of local semantic identities.
+   */
+  private readonly foreignExports: Map<string, Set<string>> = new Map<
+    string,
+    Set<string>
+  >();
+
+  /**
+   * Local modules that forward unknown dependency names through wildcard uses.
+   *
+   * This permits transitive dependency forwarding while unresolved names in
+   * ordinary local modules remain extraction failures.
+   */
+  private readonly foreignStars: Set<string> = new Set<string>();
   private readonly externalTargets = new Map<
     string,
     IEvidenceRustFileAnalysis
@@ -400,9 +418,30 @@ export class EvidenceRustModuleResolver {
         for (const use of module.uses)
           for (const binding of use.bindings)
             if (binding.wildcard) {
+              if (
+                this.foreignUse(module, binding.path, true) &&
+                !this.foreignStars.has(module.key)
+              ) {
+                this.foreignStars.add(module.key);
+                changed = true;
+              }
               const target = this.resolveModulePath(module, binding.path);
               const exported =
                 target === undefined ? undefined : this.exports.get(target.key);
+              const foreign: Set<string> | undefined =
+                target === undefined
+                  ? undefined
+                  : this.foreignExports.get(target.key);
+              if (foreign !== undefined) {
+                const names: Set<string> =
+                  this.foreignExports.get(module.key) ?? new Set<string>();
+                for (const name of foreign)
+                  if (!names.has(name)) {
+                    names.add(name);
+                    changed = true;
+                  }
+                this.foreignExports.set(module.key, names);
+              }
               for (const records of exported === undefined
                 ? []
                 : exported.values())
@@ -417,6 +456,15 @@ export class EvidenceRustModuleResolver {
               const records = this.resolveNamedPath(module, binding.path);
               const name = binding.alias ?? binding.path.at(-1);
               if (name === undefined) continue;
+              if (this.foreignUse(module, binding.path, false)) {
+                const names: Set<string> =
+                  this.foreignExports.get(module.key) ?? new Set<string>();
+                if (!names.has(name)) {
+                  names.add(name);
+                  this.foreignExports.set(module.key, names);
+                  changed = true;
+                }
+              }
               for (const record of records)
                 changed =
                   this.addExport(entries, {
@@ -434,7 +482,10 @@ export class EvidenceRustModuleResolver {
           const resolved = binding.wildcard
             ? this.resolveModulePath(module, binding.path) !== undefined
             : this.resolveNamedPath(module, binding.path).length !== 0;
-          if (!resolved)
+          if (
+            !resolved &&
+            !this.foreignUse(module, binding.path, binding.wildcard)
+          )
             this.problem(
               "rust-use-resolution",
               module.placement.analysis,
@@ -458,6 +509,56 @@ export class EvidenceRustModuleResolver {
           );
       }
     }
+  }
+
+  /**
+   * Recognizes dependency use paths that cannot introduce a local owner.
+   *
+   * Known foreign provenance follows local paths without enrolling dependency
+   * declarations. Unresolved crate/self/super paths and known local names
+   * retain resolution failures; absent bare crate names belong to the
+   * dependency boundary.
+   */
+  private foreignUse(
+    module: IEvidenceRustModuleRecord,
+    sourcePath: string[],
+    wildcard: boolean,
+  ): boolean {
+    const first: string | undefined = sourcePath[0];
+    if (first === undefined) return false;
+    const target: IEvidenceRustModuleRecord | undefined =
+      this.resolveModulePath(
+        module,
+        wildcard ? sourcePath : sourcePath.slice(0, -1),
+      );
+    if (target !== undefined) {
+      const name: string | undefined = sourcePath.at(-1);
+      if (!wildcard && name !== undefined && target.bindings.has(name))
+        return false;
+      if (this.foreignStars.has(target.key)) return true;
+      const names: Set<string> | undefined = this.foreignExports.get(
+        target.key,
+      );
+      if (
+        !wildcard &&
+        name !== undefined &&
+        names !== undefined &&
+        names.has(name)
+      )
+        return true;
+    }
+    if (["crate", "self", "super"].includes(first)) return false;
+    const root: IEvidenceRustModuleRecord | undefined = this.modules.get(
+      this.moduleKey(module.rootKey, []),
+    );
+    if (root === undefined) return false;
+    const exported: Map<string, IEvidenceRustExportRecord[]> | undefined =
+      this.exports.get(root.key);
+    return (
+      !root.bindings.has(first) &&
+      (exported === undefined || !exported.has(first)) &&
+      !module.bindings.has(first)
+    );
   }
 
   private resolveImplementations(): void {

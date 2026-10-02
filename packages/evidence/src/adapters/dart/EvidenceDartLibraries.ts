@@ -35,6 +35,13 @@ export namespace EvidenceDartLibraries {
         files.set(normalize(name), analysis);
     for (const analysis of analyses)
       for (const directive of analysis.directives) {
+        // Package and SDK exports forward foreign owners. Parts still require
+        // reciprocal local ownership and must not use this export boundary.
+        if (
+          directive.kind === "export" &&
+          /^(?:package|dart):/u.test(directive.target)
+        )
+          continue;
         if (directive.named) {
           const matches = analyses.filter(
             (candidate) =>

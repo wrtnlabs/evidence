@@ -1,11 +1,12 @@
 import typia from "typia";
 import { Parser } from "web-tree-sitter";
-import type { Language, Tree } from "web-tree-sitter";
+import type { Language, Tree, Node as EvidenceNode } from "web-tree-sitter";
 
 import { EvidenceLanguageRegistry } from "./EvidenceLanguageRegistry";
 import { EvidenceParseSession } from "./EvidenceParseSession";
 import { EvidenceParserError } from "./EvidenceParserError";
 import { EvidenceParserSlots } from "../internal/EvidenceParserSlots";
+import { EvidenceTypeScriptSyntax } from "./EvidenceTypeScriptSyntax";
 import { EvidenceTreeSitterAssets } from "../internal/EvidenceTreeSitterAssets";
 import { EvidenceTreeSitterRange } from "../internal/EvidenceTreeSitterRange";
 import { EvidenceTreeSitterRuntime } from "../internal/EvidenceTreeSitterRuntime";
@@ -193,28 +194,36 @@ export class EvidenceParser {
           "Parsing stopped before producing a tree; this source has no complete inventory.",
         );
       if (tree.rootNode.hasError) {
-        const cursor = tree.walk();
-        try {
-          // Descend only through error-bearing branches, including inserted MISSING tokens.
-          let node = cursor.currentNode;
-          while (!node.isError && !node.isMissing) {
-            if (!cursor.gotoFirstChild()) break;
-            while (
-              !cursor.currentNode.hasError &&
-              !cursor.currentNode.isMissing
-            ) {
-              if (!cursor.gotoNextSibling()) break;
-            }
-            node = cursor.currentNode;
-          }
-          throw new EvidenceParserError(
-            "parse-incomplete",
-            input.file,
-            "The grammar found an ERROR or MISSING node. Correct the source or add support for its syntax before checking coverage.",
-            EvidenceTreeSitterRange.from(node),
+        // Visit every recovery branch. A recognized grammar gap cannot hide a
+        // separate unreadable declaration elsewhere in the same source.
+        const pending: EvidenceNode[] = [tree.rootNode];
+        while (pending.length !== 0) {
+          const node: EvidenceNode | undefined = pending.pop();
+          if (node === undefined) break;
+          const children: EvidenceNode[] = node.children.filter(
+            (child: EvidenceNode): boolean =>
+              child.hasError || child.isError || child.isMissing,
           );
-        } finally {
-          cursor.delete();
+          // Some grammars hide inserted tokens beneath an error-bearing leaf.
+          // The absence of a visible recovery child must not certify that leaf.
+          if (
+            node.isError ||
+            node.isMissing ||
+            (node.hasError && children.length === 0)
+          ) {
+            if (
+              input.type === "typescript" &&
+              EvidenceTypeScriptSyntax.typeOnlyStar(node)
+            )
+              continue;
+            throw new EvidenceParserError(
+              "parse-incomplete",
+              input.file,
+              "The pinned Tree-sitter grammar could not extract a complete source tree (ERROR or MISSING node). This does not establish that the source is invalid. Add grammar or adapter support for the reported construct before checking coverage.",
+              EvidenceTreeSitterRange.from(node),
+            );
+          }
+          pending.push(...children.reverse());
         }
       }
       session = new EvidenceParseSession(tree, input.file);

@@ -23,4 +23,13 @@ export interface IEvidencePythonResolution {
    * private.
    */
   cyclic: boolean;
+
+  /**
+   * Whether the requested name forwards a dependency outside the local
+   * snapshot.
+   *
+   * Omission means no foreign binding was found. Foreign names introduce no
+   * local declaration obligation, including through a selected local barrel.
+   */
+  foreign?: boolean;
 }

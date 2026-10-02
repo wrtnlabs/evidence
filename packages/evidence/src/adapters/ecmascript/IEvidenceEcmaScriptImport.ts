@@ -25,8 +25,9 @@ export interface IEvidenceEcmaScriptImport {
   /**
    * Authored module specifier naming the import target.
    *
-   * The export resolver resolves this spelling relative to the importing source
-   * and reports unsupported package-resolution requests.
+   * The export resolver follows local specifiers relative to the importing
+   * source. Package imports forward foreign bindings without enrolling them as
+   * local declaration owners.
    */
   specifier: string;
 

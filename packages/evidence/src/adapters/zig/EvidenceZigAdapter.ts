@@ -122,7 +122,7 @@ export class EvidenceZigAdapter implements IEvidenceAdapter<"zig"> {
               parserError?.message ??
               `Zig parsing failed: ${cause instanceof Error ? cause.message : String(cause)}`,
             repair:
-              "Correct the source or add adapter support before evaluating coverage.",
+              "Ensure grammar and adapter support for the reported source construct before evaluating coverage.",
             location: {
               file: source.physicalPath,
               ...(parserError?.range === undefined

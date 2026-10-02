@@ -140,7 +140,7 @@ export class EvidenceDbmlAdapter implements IEvidenceAdapter<"dbml"> {
             severity: "error",
             message: error?.message ?? String(cause),
             repair:
-              "Correct the selected DBML source or add grammar/adapter support before checking coverage.",
+              "Ensure grammar and adapter support for the reported source construct before evaluating coverage.",
             location: {
               file: source.physicalPath,
               ...(error?.range === undefined ? {} : { range: error.range }),
