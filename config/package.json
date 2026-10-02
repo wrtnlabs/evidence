@@ -1,6 +1,6 @@
 {
   "name": "@wrtnlabs/evidence-config",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Shared compiler and lint configuration for the Evidence workspace.",
   "devDependencies": {
