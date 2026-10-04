@@ -1,9 +1,11 @@
 import type { IEvidenceClaimContext } from "../contexts/IEvidenceClaimContext";
 import type { IEvidenceGraphClaim } from "../structures/IEvidenceGraphClaim";
+import type { IEvidenceGraphReference } from "../structures/IEvidenceGraphReference";
 import type { IEvidenceGraphResolution } from "../structures/IEvidenceGraphResolution";
 import type { IEvidenceGraphReviewResolution } from "../structures/IEvidenceGraphReviewResolution";
 import type { IEvidenceTargetStatement } from "../structures/IEvidenceTargetStatement";
 import type { EvidenceTargetResolutionStatus } from "../typings/EvidenceTargetResolutionStatus";
+import type { IEvidenceStatementStanding } from "./IEvidenceStatementStanding";
 
 /**
  * Decides which claim answers for an annotation that several claims can see.
@@ -23,8 +25,10 @@ import type { EvidenceTargetResolutionStatus } from "../typings/EvidenceTargetRe
  *    so its outcome, an error included, is the claim's own.
  *
  * A claim disowns an annotation only when another active claim holds the same
- * annotation at a strictly higher level. Ties stay with every claim, so an
- * annotation that no claim accepts, such as a mistyped file, still fails
+ * annotation at a strictly higher level and cannot hide the finding behind a
+ * weaker severity: the higher claim must resolve the target cleanly or report
+ * at least the severity the disowned claim would. Ties stay with every claim,
+ * so an annotation that no claim accepts, such as a mistyped file, still fails
  * instead of vanishing.
  */
 export namespace EvidenceStatementOwnership {
@@ -40,20 +44,32 @@ export namespace EvidenceStatementOwnership {
     contexts: IEvidenceClaimContext[],
     claims: IEvidenceGraphClaim[],
   ): void {
-    const levels: Map<string, number>[] = claims.map(measure);
+    const standings: Map<string, IEvidenceStatementStanding>[] =
+      claims.map(measure);
     claims.forEach((claim: IEvidenceGraphClaim, index: number): void => {
       const context: IEvidenceClaimContext | undefined = contexts[index];
       if (context === undefined)
         throw new Error(`Graph claim ${index} has no preparation context.`);
-      const own: Map<string, number> | undefined = levels[index];
+      const own: Map<string, IEvidenceStatementStanding> | undefined =
+        standings[index];
       if (own === undefined)
-        throw new Error(`Graph claim ${index} has no ownership levels.`);
+        throw new Error(`Graph claim ${index} has no ownership standings.`);
       const lost: Set<string> = new Set<string>();
-      for (const [key, level] of own)
+      for (const [key, standing] of own)
         if (
-          levels.some(
-            (other: Map<string, number>, position: number): boolean =>
-              position !== index && (other.get(key) ?? -1) > level,
+          standings.some(
+            (
+              other: Map<string, IEvidenceStatementStanding>,
+              position: number,
+            ): boolean => {
+              const rival: IEvidenceStatementStanding | undefined =
+                other.get(key);
+              return (
+                position !== index &&
+                rival !== undefined &&
+                outranks(rival, standing)
+              );
+            },
           )
         )
           lost.add(key);
@@ -84,49 +100,89 @@ export namespace EvidenceStatementOwnership {
   }
 
   /**
-   * Records the highest resolution level each annotation reached in one claim.
+   * Records how far each annotation got in one claim.
    *
    * An inactive claim yields no entries: it evaluates nothing, so it can
    * neither own an annotation nor lose one. In an active claim, an annotation
-   * whose references are all inactive or never selected keeps level 0.
+   * whose references are all inactive or never selected keeps level 0 at error
+   * severity, which is how the participation report treats it.
    */
-  function measure(claim: IEvidenceGraphClaim): Map<string, number> {
-    const output: Map<string, number> = new Map<string, number>();
+  function measure(
+    claim: IEvidenceGraphClaim,
+  ): Map<string, IEvidenceStatementStanding> {
+    const output: Map<string, IEvidenceStatementStanding> = new Map<
+      string,
+      IEvidenceStatementStanding
+    >();
     if (claim.severity === "off") return output;
 
     const declarations: Map<string, string> = new Map<string, string>();
     for (const declaration of claim.inventory.declarations) {
       const key: string = declarationKey(declaration, declaration.kind);
       declarations.set(declaration.id, key);
-      output.set(key, 0);
+      output.set(key, { level: 0, severity: 2, resolved: false });
     }
     const reviews: Map<string, string> = new Map<string, string>();
     for (const review of claim.inventory.reviews) {
       const key: string = reviewKey(review, review.reviews);
       reviews.set(review.id, key);
-      output.set(key, 0);
+      output.set(key, { level: 0, severity: 2, resolved: false });
     }
 
     for (const reference of claim.references) {
       if (reference.severity === "off") continue;
       for (const entry of reference.resolutions)
-        lift(output, declarations.get(entry.declarationId), entry);
+        lift(output, declarations.get(entry.declarationId), entry, reference);
       for (const entry of reference.reviewResolutions ?? [])
-        lift(output, reviews.get(entry.reviewId), entry);
+        lift(output, reviews.get(entry.reviewId), entry, reference);
     }
     return output;
   }
 
-  /** Stores the larger of the recorded level and the level of one status. */
+  /**
+   * Replaces a standing when a reference got further, or equally far at a
+   * higher severity.
+   *
+   * Every resolution level is at least 1, so the first reference that selects
+   * an annotation always replaces its level-0 placeholder.
+   */
   function lift(
-    output: Map<string, number>,
+    output: Map<string, IEvidenceStatementStanding>,
     key: string | undefined,
     entry: IEvidenceGraphResolution | IEvidenceGraphReviewResolution,
+    reference: IEvidenceGraphReference,
   ): void {
     if (key === undefined) return;
-    output.set(
-      key,
-      Math.max(output.get(key) ?? 0, level(entry.resolution.status)),
+    const next: IEvidenceStatementStanding = {
+      level: level(entry.resolution.status),
+      severity: reference.severity === "warning" ? 1 : 2,
+      resolved: entry.resolution.status === "resolved",
+    };
+    const current: IEvidenceStatementStanding | undefined = output.get(key);
+    if (
+      current === undefined ||
+      next.level > current.level ||
+      (next.level === current.level && next.severity > current.severity)
+    )
+      output.set(key, next);
+  }
+
+  /**
+   * Tests whether one claim's standing takes an annotation from another claim.
+   *
+   * A strictly higher level is required. A clean resolution takes the
+   * annotation at any severity because it reports nothing to hide. A failing
+   * outcome takes it only when it reports at least the severity the other claim
+   * would, otherwise a warning-level reference could turn an error into a
+   * warning.
+   */
+  function outranks(
+    rival: IEvidenceStatementStanding,
+    own: IEvidenceStatementStanding,
+  ): boolean {
+    return (
+      rival.level > own.level &&
+      (rival.resolved || rival.severity >= own.severity)
     );
   }
 

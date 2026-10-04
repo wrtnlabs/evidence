@@ -31,13 +31,21 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  *    the missing file and the owner keeps its missing acknowledgement.
  * 5. Cite an existing file that neither claim selects and require both claims to
  *    report that the file is not among their selected reference files.
- * 6. Require a review of the H2 claim's reference and add a review without a
- *    fingerprint to a document both claims read:
+ * 6. Require reviews in both references and review each citation without a
+ *    fingerprint:
  *
- *    - Only the claim that owns the citation reports the missing fingerprint.
- *    - The other claim reports no review target error.
- * 7. Write the fingerprint from that diagnostic into the review and require exit 0
- *    with no diagnostic.
+ *    - Each claim reports the missing fingerprint of its own citation only.
+ *    - Neither claim reports the other claim's review as orphaned or unresolved.
+ * 7. Write each reported fingerprint into its review and require exit 0 with no
+ *    diagnostic.
+ * 8. Lower the H2 claim to a warning:
+ *
+ *    - A valid layout still passes without diagnostics, because a clean resolution
+ *         hides nothing.
+ *    - A mistyped anchor in that claim's reference stays a warning while the error
+ *         claim keeps its own error, so a warning cannot absorb an error.
+ *    - A mistyped anchor in the error claim's reference is reported once, as an
+ *         error, by the claim that owns the file.
  */
 export async function test_checker_shared_hosts_markdown(): Promise<void> {
   const location = join(__dirname, `shared hosts markdown ${randomUUID()}`);
@@ -121,37 +129,103 @@ export async function test_checker_shared_hosts_markdown(): Promise<void> {
       );
 
       // A review follows the citation it pairs with, not the claim that reads it.
-      const review = (fingerprint: string): string =>
-        document("rules/obligations.md#o1", "rules/principles.md#p1", [
-          `<!-- @evidenceReview rules/principles.md#p1 ${fingerprint}Reviewed against P1. -->`,
-        ]);
+      const review = (first: string, second: string): string =>
+        document(
+          "rules/obligations.md#o1",
+          "rules/principles.md#p1",
+          [
+            `<!-- @evidenceReview rules/obligations.md#o1 ${first}Reviewed against O1. -->`,
+          ],
+          [
+            `<!-- @evidenceReview rules/principles.md#p1 ${second}Reviewed against P1. -->`,
+          ],
+        );
       await EvidenceTestFileSystem.save(directory, {
         "evidence.json": configuration(true),
-        "docs/a.md": review(""),
+        "docs/a.md": review("", ""),
       });
       const unpinned: IEvidenceCheckReport =
         await EvidenceChecker.check(config);
       TestValidator.equals(
-        "review is judged only by the claim that owns the citation",
+        "each claim judges only the review of its own citation",
         codes(unpinned),
-        ["1:graph-missing-review-fingerprint"],
+        [
+          "0:graph-missing-review-fingerprint",
+          "1:graph-missing-review-fingerprint",
+        ],
       );
 
-      // Pinning the reported fingerprint settles the review in the owning claim.
-      const fingerprint: string | undefined = unpinned.diagnostics
-        .map(
-          (diagnostic: IEvidenceDiagnostic): string | undefined =>
-            /#[0-9a-f]{7}/.exec(diagnostic.message)?.[0],
-        )
-        .find((value: string | undefined): boolean => value !== undefined);
-      if (fingerprint === undefined)
-        throw new Error("The review diagnostic names no fingerprint.");
+      // Pinning each reported fingerprint settles the reviews in their owners.
+      const fingerprints: Map<string, string> = new Map<string, string>();
+      for (const diagnostic of unpinned.diagnostics) {
+        const match: RegExpExecArray | null =
+          /@evidenceReview for '([^']+)'.*fingerprint is '(#[0-9a-f]{7})'/.exec(
+            diagnostic.message,
+          );
+        if (match?.[1] !== undefined && match[2] !== undefined)
+          fingerprints.set(match[1], match[2]);
+      }
+      const first: string | undefined = fingerprints.get(
+        "rules/obligations.md#o1",
+      );
+      const second: string | undefined = fingerprints.get(
+        "rules/principles.md#p1",
+      );
+      if (first === undefined || second === undefined)
+        throw new Error("A review diagnostic names no fingerprint.");
       await EvidenceTestFileSystem.save(directory, {
-        "docs/a.md": review(`${fingerprint} `),
+        "docs/a.md": review(`${first} `, `${second} `),
       });
       const pinned: IEvidenceCheckReport = await EvidenceChecker.check(config);
-      TestValidator.equals("pinned review exit", pinned.exitCode, 0);
-      TestValidator.equals("pinned review diagnostics", codes(pinned), []);
+      TestValidator.equals("pinned reviews exit", pinned.exitCode, 0);
+      TestValidator.equals("pinned reviews diagnostics", codes(pinned), []);
+
+      // A warning claim may own a clean citation but cannot absorb another claim's error.
+      await EvidenceTestFileSystem.save(directory, {
+        "evidence.json": configuration(false, "warning"),
+        "docs/a.md": document(
+          "rules/obligations.md#o1",
+          "rules/principles.md#p1",
+        ),
+      });
+      const lowered: IEvidenceCheckReport = await EvidenceChecker.check(config);
+      TestValidator.equals("warning claim exit", lowered.exitCode, 0);
+      TestValidator.equals("warning claim diagnostics", codes(lowered), []);
+      await EvidenceTestFileSystem.save(directory, {
+        "docs/a.md": document(
+          "rules/obligations.md#o1",
+          "rules/principles.md#p9",
+        ),
+      });
+      const downgraded: IEvidenceCheckReport =
+        await EvidenceChecker.check(config);
+      TestValidator.equals(
+        "warning claim keeps the error claim's own finding",
+        codes(downgraded),
+        [
+          "0:target-missing-file",
+          "1:graph-checklist-missing",
+          "1:target-missing-member",
+        ],
+      );
+      TestValidator.equals(
+        "warning claim mistype exit",
+        downgraded.exitCode,
+        1,
+      );
+      await EvidenceTestFileSystem.save(directory, {
+        "docs/a.md": document(
+          "rules/obligations.md#o9",
+          "rules/principles.md#p1",
+        ),
+      });
+      const owned: IEvidenceCheckReport = await EvidenceChecker.check(config);
+      TestValidator.equals(
+        "error claim owns its mistyped anchor",
+        codes(owned),
+        ["0:graph-missing-acknowledgement", "0:target-missing-member"],
+      );
+      TestValidator.equals("error claim mistype exit", owned.exitCode, 1);
     },
   );
 }
@@ -160,9 +234,13 @@ export async function test_checker_shared_hosts_markdown(): Promise<void> {
  * Builds the two-claim layout over the same document files.
  *
  * The file claim answers the obligations rule file and the H2 claim answers the
- * principles rule file. `requireReview` applies to the H2 claim's reference.
+ * principles rule file. `requireReview` applies to both references, and
+ * `principles` sets the severity of the H2 claim.
  */
-function configuration(requireReview: boolean): string {
+function configuration(
+  requireReview: boolean,
+  principles: "error" | "warning" = "error",
+): string {
   return JSON.stringify({
     claims: [
       {
@@ -175,10 +253,12 @@ function configuration(requireReview: boolean): string {
           files: ["rules/obligations.md"],
           symbol: "h2",
           noEvidenceExclude: true,
+          ...(requireReview ? { requireReview: true } : {}),
         },
       },
       {
         name: "h2 answers principles",
+        severity: principles,
         type: "markdown",
         files: ["docs/*.md"],
         symbol: "h2",
@@ -198,12 +278,19 @@ function configuration(requireReview: boolean): string {
 /**
  * Writes one document whose file-level and H2 tags cite the given targets.
  *
- * `extra` lines follow the H2 tag inside the same section, which is where a
- * review of the H2 citation belongs.
+ * `head` lines follow the file-level tag, where a review of the file citation
+ * belongs. `extra` lines follow the H2 tag inside the same section, which is
+ * where a review of the H2 citation belongs.
  */
-function document(file: string, h2: string, extra: string[] = []): string {
+function document(
+  file: string,
+  h2: string,
+  head: string[] = [],
+  extra: string[] = [],
+): string {
   return [
     `<!-- @evidence ${file} The file answers its obligation once. -->`,
+    ...head,
     "",
     "# A",
     "",

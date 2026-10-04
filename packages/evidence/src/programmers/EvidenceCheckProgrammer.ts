@@ -237,6 +237,8 @@ export namespace EvidenceCheckProgrammer {
     };
     const { hosts, declarations, reviews } = context;
 
+    // Record applicability before resolution so an incompatible target becomes
+    // one useful diagnostic instead of one resolution failure per reference.
     for (const declaration of inventory.declarations)
       declarations.set(
         declaration.id,
