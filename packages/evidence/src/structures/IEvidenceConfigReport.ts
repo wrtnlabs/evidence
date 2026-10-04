@@ -23,11 +23,10 @@ export interface IEvidenceConfigReport {
   /**
    * Maximum number of distinct units whose diagnostics are printed.
    *
-   * A unit is the reference unit a finding names, or the documentation host for
-   * statement findings. Units are admitted in the order their first diagnostic
-   * appears, and every diagnostic of an admitted unit is kept. Findings naming
-   * neither are never counted against this bound. A positive integer is
-   * required.
+   * A unit is the unit a finding names, or the documentation host for statement
+   * findings. Units are admitted in the order their first diagnostic appears,
+   * and every diagnostic of an admitted unit is kept. Findings naming neither
+   * are never counted against this bound. A positive integer is required.
    */
   unit?: number | undefined;
 }
