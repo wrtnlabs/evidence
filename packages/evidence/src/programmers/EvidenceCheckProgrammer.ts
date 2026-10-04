@@ -3,6 +3,7 @@ import { EvidenceSourceLoader } from "../loaders/EvidenceSourceLoader";
 import { EvidenceSwaggerAdapter } from "../adapters/swagger/EvidenceSwaggerAdapter";
 import { EvidenceTargetResolver } from "../targets/EvidenceTargetResolver";
 import { EvidenceAdapterFactory } from "../internal/EvidenceAdapterFactory";
+import { EvidenceStatementOwnership } from "../internal/EvidenceStatementOwnership";
 import { EvidenceTargetApplicability } from "../internal/EvidenceTargetApplicability";
 import { EvidenceFileGlob } from "../internal/EvidenceFileGlob";
 import type { IEvidenceMaterializedClaim } from "../internal/IEvidenceMaterializedClaim";
@@ -75,9 +76,21 @@ export namespace EvidenceCheckProgrammer {
   export async function evaluate(
     context: IEvidenceCheckContext,
   ): Promise<IEvidenceCheckAnalysis> {
-    const graphInput: IEvidenceGraphInput = {
-      claims: await Promise.all(context.claims.map(prepareClaim)),
-    };
+    const contexts: IEvidenceClaimContext[] = context.claims.map(openClaim);
+    const claims: IEvidenceGraphClaim[] = await Promise.all(
+      contexts.map(closeClaim),
+    );
+    // Claims that read the same host files see the same annotations. Settle
+    // which claim answers for each before participation is judged, so one claim
+    // does not report another claim's citation as its own error.
+    EvidenceStatementOwnership.release(contexts, claims);
+    for (const prepared of contexts)
+      reportNonParticipating(
+        prepared.inventory,
+        prepared.declarations,
+        prepared.reviews,
+      );
+    const graphInput: IEvidenceGraphInput = { claims };
     const graph = EvidenceGraph.evaluate(graphInput);
     return { graphInput, graph, report: report(context.plan, graph) };
   }
@@ -200,19 +213,21 @@ export namespace EvidenceCheckProgrammer {
   }
 
   /**
-   * Clones a claim inventory and prepares its graph-facing reference
-   * boundaries.
+   * Clones a claim inventory and records where each annotation can apply.
    *
-   * The clone receives preparation diagnostics so the materialized inventory
-   * can still serve as the unmodified loading result. Declaration and review
-   * indexes record eligible reference positions before resolving targets,
-   * ensuring an annotation is only evaluated where its grammar and host can
-   * participate.
+   * The clone later receives preparation diagnostics so the materialized
+   * inventory can still serve as the unmodified loading result. Declaration and
+   * review indexes record eligible reference positions before any target is
+   * resolved, ensuring an annotation is only evaluated where its grammar and
+   * host can participate. Participation is judged afterward, because it depends
+   * on the other claims that read the same annotation.
    */
-  async function prepareClaim(
+  function openClaim(
     materialized: IEvidenceMaterializedClaim,
-  ): Promise<IEvidenceGraphClaim> {
-    const inventory = structuredClone(materialized.inventory);
+  ): IEvidenceClaimContext {
+    const inventory: IEvidenceInventory = structuredClone(
+      materialized.inventory,
+    );
     const context: IEvidenceClaimContext = {
       materialized,
       inventory,
@@ -242,8 +257,20 @@ export namespace EvidenceCheckProgrammer {
           materialized.references,
         ),
       );
-    reportNonParticipating(inventory, declarations, reviews);
+    return context;
+  }
 
+  /**
+   * Builds the graph claim whose references resolve the opened annotations.
+   *
+   * Every reference resolves only the annotations eligible for its position, so
+   * the result can still hold resolutions that another claim owns. The caller
+   * withdraws those before evaluation.
+   */
+  async function closeClaim(
+    context: IEvidenceClaimContext,
+  ): Promise<IEvidenceGraphClaim> {
+    const { materialized, inventory } = context;
     return {
       index: materialized.plan.index,
       ...(materialized.plan.population.name === undefined
@@ -434,6 +461,10 @@ export namespace EvidenceCheckProgrammer {
    * Both acknowledgement and review diagnostics retain the authored location,
    * host, and target so a caller can repair configuration or source text
    * without inferring which pre-resolution applicability decision failed.
+   *
+   * Only an empty position set is reported. An annotation that another claim
+   * owns has no entry after ownership is settled, so it is not a participation
+   * error of this claim.
    */
   function reportNonParticipating(
     inventory: IEvidenceInventory,
