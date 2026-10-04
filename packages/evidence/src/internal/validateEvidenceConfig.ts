@@ -25,6 +25,13 @@ export function validateEvidenceConfig(
     problems.push(
       "claims: at least one claim is required; an empty graph cannot establish evidence coverage.",
     );
+  for (const key of ["limit", "unit"] as const) {
+    const value: number | undefined = config.report?.[key];
+    if (value !== undefined && !(Number.isInteger(value) && value >= 1))
+      problems.push(
+        `report.${key}: expected a positive integer, received ${String(value)}.`,
+      );
+  }
   config.claims.forEach((claim, claimIndex) => {
     const claimPath = `claims[${claimIndex}]`;
     validateArtifactType(problems, `${claimPath}.type`, claim.type);

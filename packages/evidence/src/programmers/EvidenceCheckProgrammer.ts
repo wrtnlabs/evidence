@@ -500,6 +500,7 @@ export namespace EvidenceCheckProgrammer {
       counts,
       claims,
       diagnostics,
+      ...(plan.report === undefined ? {} : { bounds: plan.report }),
     };
   }
 

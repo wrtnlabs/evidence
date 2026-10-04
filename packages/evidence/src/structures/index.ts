@@ -8,6 +8,7 @@ export type * from "./IEvidenceHost";
 export type * from "./IEvidenceInventory";
 export type * from "./IEvidencePopulation";
 export type * from "./IEvidencePublicAddress";
+export type * from "./IEvidenceConfigReport";
 export type * from "./IEvidenceResolution";
 export type * from "./IEvidenceReview";
 export type * from "./IEvidenceSourceLocation";

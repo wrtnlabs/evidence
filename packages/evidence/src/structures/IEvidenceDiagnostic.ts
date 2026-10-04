@@ -63,6 +63,14 @@ export interface IEvidenceDiagnostic {
   reference?: number;
 
   /**
+   * Reference unit the finding is about, such as an uncovered heading.
+   *
+   * Omission means the finding concerns a statement, a configuration, or the
+   * aggregate graph rather than one unit.
+   */
+  unitId?: string;
+
+  /**
    * Documentation host implicated in the finding.
    *
    * When present, this connects a statement-level error to its extracted

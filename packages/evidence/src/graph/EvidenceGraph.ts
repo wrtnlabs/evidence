@@ -1417,6 +1417,7 @@ class EvidenceGraphEvaluator {
       repair,
       claim: this.claimIndex(claim),
       reference: this.referenceIndex(claim, reference),
+      ...(unit === undefined ? {} : { unitId: unit.id }),
       ...(statement === undefined
         ? site === undefined
           ? {}

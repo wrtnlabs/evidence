@@ -2,6 +2,7 @@ import type { EvidenceCheckStatus } from "../typings/EvidenceCheckStatus";
 import type { EvidenceCommandExitCode } from "../typings/EvidenceCommandExitCode";
 import type { IEvidenceCheckClaim } from "./IEvidenceCheckClaim";
 import type { IEvidenceCheckCounts } from "./IEvidenceCheckCounts";
+import type { IEvidenceConfigReport } from "./IEvidenceConfigReport";
 import type { IEvidenceDiagnostic } from "./IEvidenceDiagnostic";
 
 /**
@@ -82,4 +83,20 @@ export interface IEvidenceCheckReport {
    * reorder otherwise equivalent reports.
    */
   diagnostics: IEvidenceDiagnostic[];
+
+  /**
+   * Number of diagnostics withheld by a report window.
+   *
+   * Omission means every diagnostic is listed. `counts` still totals the
+   * withheld findings.
+   */
+  omittedDiagnostics?: number;
+
+  /**
+   * Printing bounds the configuration requested for this check.
+   *
+   * Renderers apply them unless the command supplies its own. Omission means
+   * the configuration requested no narrowing.
+   */
+  bounds?: IEvidenceConfigReport;
 }

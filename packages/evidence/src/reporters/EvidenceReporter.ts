@@ -1,5 +1,6 @@
 import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
+import type { IEvidenceConfigReport } from "../structures/IEvidenceConfigReport";
 import type { EvidenceReportFormat } from "../typings/EvidenceReportFormat";
 
 /**
@@ -20,8 +21,43 @@ export namespace EvidenceReporter {
   export function render(
     report: IEvidenceCheckReport,
     format: EvidenceReportFormat,
+    window: IEvidenceConfigReport = {},
   ): string {
-    return format === "json" ? json(report) : text(report);
+    const bounded: IEvidenceCheckReport = narrow(report, window);
+    return format === "json" ? json(bounded) : text(bounded);
+  }
+
+  /**
+   * Withholds diagnostics beyond the requested unit and count bounds.
+   *
+   * Units are admitted in order of their first diagnostic, and findings naming
+   * no unit stay eligible. Counts, status, and exit code are copied unchanged
+   * so the omission cannot make a failing check look clean.
+   */
+  export function narrow(
+    report: IEvidenceCheckReport,
+    window: IEvidenceConfigReport,
+  ): IEvidenceCheckReport {
+    // Command options override the configuration's bounds one by one.
+    const limit: number | undefined = window.limit ?? report.bounds?.limit;
+    const units: number | undefined = window.unit ?? report.bounds?.unit;
+    if (limit === undefined && units === undefined) return report;
+    const admitted: Set<string> = new Set();
+    const selected: IEvidenceDiagnostic[] = [];
+    for (const diagnostic of report.diagnostics) {
+      const unit: string | undefined = diagnostic.unitId ?? diagnostic.hostId;
+      if (unit !== undefined && !admitted.has(unit)) {
+        if (units !== undefined && admitted.size >= units) continue;
+        admitted.add(unit);
+      }
+      selected.push(diagnostic);
+    }
+    const diagnostics: IEvidenceDiagnostic[] =
+      limit === undefined ? selected : selected.slice(0, limit);
+    const omitted: number = report.diagnostics.length - diagnostics.length;
+    return omitted === 0
+      ? report
+      : { ...report, diagnostics, omittedDiagnostics: omitted };
   }
 
   /**
@@ -51,6 +87,10 @@ export namespace EvidenceReporter {
       `Coverage: ${counts.coveredUnits}/${counts.units} units covered, ${counts.missingUnits} missing.`,
       `Diagnostics: ${counts.errors} errors, ${counts.warnings} warnings.`,
     ];
+    if (report.omittedDiagnostics !== undefined)
+      lines.push(
+        `Showing ${report.diagnostics.length} of ${report.diagnostics.length + report.omittedDiagnostics} diagnostics; ${report.omittedDiagnostics} omitted by --limit/--unit.`,
+      );
     for (const diagnostic of report.diagnostics)
       lines.push("", ...diagnosticLines(report, diagnostic));
     return lines.join("\n") + "\n";

@@ -56,4 +56,18 @@ export interface IEvidenceCheckCommand {
    * attempts.
    */
   watch?: true;
+
+  /**
+   * Maximum number of diagnostics to print.
+   *
+   * Omission prints all of them; counts always cover the whole analysis.
+   */
+  limit?: number;
+
+  /**
+   * Maximum number of units whose diagnostics are printed.
+   *
+   * Omission prints diagnostics for every unit.
+   */
+  unit?: number;
 }

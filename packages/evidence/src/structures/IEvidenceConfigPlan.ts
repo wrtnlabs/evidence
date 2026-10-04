@@ -1,4 +1,5 @@
 import type { IEvidenceConfigPlanClaim } from "./IEvidenceConfigPlanClaim";
+import type { IEvidenceConfigReport } from "./IEvidenceConfigReport";
 
 /**
  * Validated configuration prepared for source materialization.
@@ -30,4 +31,11 @@ export interface IEvidenceConfigPlan {
    * populations.
    */
   claims: IEvidenceConfigPlanClaim[];
+
+  /**
+   * Report bounds authored in the configuration.
+   *
+   * Omission means the configuration requested no narrowing.
+   */
+  report?: IEvidenceConfigReport;
 }

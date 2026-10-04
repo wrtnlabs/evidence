@@ -1,5 +1,6 @@
 import type { EvidenceSeverity } from "../typings/EvidenceSeverity";
 import type { IEvidenceClaim } from "./IEvidenceClaim";
+import type { IEvidenceConfigReport } from "./IEvidenceConfigReport";
 
 /**
  * Configuration declaring the project's claims and required evidence
@@ -32,6 +33,22 @@ import type { IEvidenceClaim } from "./IEvidenceClaim";
  */
 export interface IEvidenceConfig {
   /**
+   * Claim selections and the evidence each must acknowledge.
+   *
+   * At least one claim is required. Each reference inside each claim creates an
+   * independent obligation; shared names or files never pool their coverage.
+   */
+  claims: IEvidenceClaim[];
+
+  /**
+   * Default bounds on the diagnostics a check report prints.
+   *
+   * Omission prints everything. Command options override each configured bound,
+   * and counts and exit code always cover the whole analysis.
+   */
+  report?: IEvidenceConfigReport | undefined;
+
+  /**
    * Root diagnostic severity inherited by claims and their references.
    *
    * Omission uses error severity. A claim or reference can override its
@@ -41,12 +58,4 @@ export interface IEvidenceConfig {
    * @default error
    */
   severity?: EvidenceSeverity | undefined;
-
-  /**
-   * Claim selections and the evidence each must acknowledge.
-   *
-   * At least one claim is required. Each reference inside each claim creates an
-   * independent obligation; shared names or files never pool their coverage.
-   */
-  claims: IEvidenceClaim[];
 }
