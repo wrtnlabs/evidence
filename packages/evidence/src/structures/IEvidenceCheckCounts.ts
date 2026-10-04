@@ -3,8 +3,8 @@
  *
  * Unit counts sum active obligations rather than deduplicating across the whole
  * graph. Two references to the same population therefore retain two
- * requirements. Diagnostic totals include every reported finding at the
- * corresponding severity.
+ * requirements. Diagnostic totals include every finding at the corresponding
+ * severity, including findings a report window withheld from `diagnostics`.
  */
 export interface IEvidenceCheckCounts {
   /**

@@ -1,4 +1,5 @@
 import { EvidenceReporter } from "./EvidenceReporter";
+import type { IEvidenceConfigReport } from "../structures/IEvidenceConfigReport";
 import type { EvidenceReportFormat } from "../typings/EvidenceReportFormat";
 import type { EvidenceWatchCycle } from "../typings/EvidenceWatchCycle";
 
@@ -18,8 +19,13 @@ export namespace EvidenceWatchReporter {
   export function render(
     cycle: EvidenceWatchCycle,
     format: EvidenceReportFormat,
+    window: IEvidenceConfigReport = {},
   ): string {
-    return format === "json" ? json(cycle) : text(cycle);
+    const bounded: EvidenceWatchCycle =
+      cycle.status === "failed"
+        ? cycle
+        : { ...cycle, report: EvidenceReporter.narrow(cycle.report, window) };
+    return format === "json" ? json(bounded) : text(bounded);
   }
 
   /**

@@ -63,6 +63,16 @@ export interface IEvidenceDiagnostic {
   reference?: number;
 
   /**
+   * Unit the finding is about, such as an uncovered reference heading or a
+   * claim declaration breaking a cardinality rule.
+   *
+   * Report windows group findings by this identity. Omission means the finding
+   * concerns a statement, a configuration, or the aggregate graph rather than
+   * one unit.
+   */
+  unitId?: string;
+
+  /**
    * Documentation host implicated in the finding.
    *
    * When present, this connects a statement-level error to its extracted

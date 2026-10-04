@@ -23,6 +23,7 @@ export type * from "./IEvidenceConfig";
 export type * from "./IEvidenceConfigPlan";
 export type * from "./IEvidenceConfigPlanClaim";
 export type * from "./IEvidenceConfigPlanReference";
+export type * from "./IEvidenceConfigReport";
 export type * from "./IEvidenceDatabaseClaim";
 export type * from "./IEvidenceDatabaseReference";
 export type * from "./IEvidenceDocumentedConfig";

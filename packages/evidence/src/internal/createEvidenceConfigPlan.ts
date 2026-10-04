@@ -57,7 +57,13 @@ export function createEvidenceConfigPlan(
       references,
     });
   });
-  return { configFile: filename, claims };
+  return {
+    configFile: filename,
+    claims,
+    ...(config.report === undefined
+      ? {}
+      : { report: structuredClone(config.report) }),
+  };
 }
 
 /**

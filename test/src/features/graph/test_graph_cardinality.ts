@@ -22,6 +22,8 @@ import { EvidenceTestInventory } from "../../internal/EvidenceTestInventory";
  *    one host; compare ordinary and uniqueEvidence reference entries.
  * 4. Require exactly one uniqueness finding on the second reference, counting two
  *    semantic hosts rather than three physical citation positions.
+ * 5. Require each cardinality finding to name the unit it is about, which is what
+ *    lets a report window group findings by unit.
  */
 export async function test_graph_cardinality(): Promise<void> {
   const reference = EvidenceTestInventory.create();
@@ -162,6 +164,13 @@ export async function test_graph_cardinality(): Promise<void> {
         diagnostic.message.includes("Broad") &&
         diagnostic.message.includes("cites 2 distinct"),
     ),
+  );
+  TestValidator.equals(
+    "cardinality findings name their subject unit",
+    singleFindings
+      .map((diagnostic) => diagnostic.unitId)
+      .sort((x, y) => String(x).localeCompare(String(y))),
+    [broad.id, empty.id].sort((x, y) => x.localeCompare(y)),
   );
   TestValidator.predicate(
     "duplicate positions remain one semantic host",
@@ -333,6 +342,11 @@ export async function test_graph_cardinality(): Promise<void> {
     "unique policy belongs to second reference",
     uniqueFinding.reference,
     1,
+  );
+  TestValidator.equals(
+    "unique finding names the contested reference unit",
+    uniqueFinding.unitId,
+    first.id,
   );
   TestValidator.predicate(
     "unique count uses semantic hosts",

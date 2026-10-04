@@ -196,6 +196,14 @@ export namespace EvidenceCommand {
         ...(kind === undefined ? {} : { kind }),
       };
     }
+    const limit: number | undefined = positiveInteger(
+      "--limit",
+      values.get("limit"),
+    );
+    const unit: number | undefined = positiveInteger(
+      "--unit",
+      values.get("unit"),
+    );
     return {
       operation,
       cwd,
@@ -203,6 +211,8 @@ export namespace EvidenceCommand {
       format: reportFormat(values.get("format")),
       ...optionalOutput(values),
       ...(watch ? { watch: true } : {}),
+      ...(limit === undefined ? {} : { limit }),
+      ...(unit === undefined ? {} : { unit }),
     };
   }
 
@@ -374,7 +384,10 @@ async function runWatch(
   process.once("SIGINT", interrupt);
   try {
     await watcher.watch(async (cycle) => {
-      const content = EvidenceWatchReporter.render(cycle, command.format);
+      const content = EvidenceWatchReporter.render(cycle, command.format, {
+        ...(command.limit === undefined ? {} : { limit: command.limit }),
+        ...(command.unit === undefined ? {} : { unit: command.unit }),
+      });
       if (destination === undefined) await writeStandardOutput(content);
       else await appendFile(destination, content, "utf8");
     });
@@ -434,7 +447,10 @@ async function runAnalysis(
       return writeReport(
         command.output,
         cwd,
-        EvidenceReporter.render(analysis.report, command.format),
+        EvidenceReporter.render(analysis.report, command.format, {
+          ...(command.limit === undefined ? {} : { limit: command.limit }),
+          ...(command.unit === undefined ? {} : { unit: command.unit }),
+        }),
         analysis.report.exitCode,
         false,
       );
@@ -627,6 +643,10 @@ function optionKey(token: string): string | undefined {
       return "language";
     case "--kind":
       return "kind";
+    case "--limit":
+      return "limit";
+    case "--unit":
+      return "unit";
     default:
       return undefined;
   }
@@ -641,6 +661,7 @@ function optionKey(token: string): string | undefined {
  */
 function optionAllowed(operation: string, option: string): boolean {
   if (option === "cwd") return true;
+  if (option === "limit" || option === "unit") return operation === "check";
   if (operation === "init") return option === "config";
   if (operation === "languages")
     return option === "format" || option === "output";
@@ -661,6 +682,24 @@ function optionalOutput(
 ): Pick<IEvidenceCheckCommand, "output"> {
   const output = values.get("output");
   return output === undefined ? {} : { output };
+}
+
+/**
+ * Parses a report-window bound as a positive integer.
+ *
+ * Zero or fractional bounds would print nothing or an ill-defined prefix, so
+ * they fail before analysis starts.
+ */
+function positiveInteger(
+  flag: string,
+  value: string | undefined,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^[1-9][0-9]*$/u.test(value))
+    throw new EvidenceCommandError(
+      `Option '${flag}' requires a positive integer.`,
+    );
+  return Number(value);
 }
 
 /**
@@ -779,6 +818,8 @@ const HELP = dedent`
     -o, --output <path>   Write command output to a file.
         --language <type> Filter the Evidence Graph list by artifact type.
         --kind <symbol>   Filter the Evidence Graph list by symbol kind.
+        --limit <n>       Print at most n check diagnostics; counts stay complete.
+        --unit <n>        Print diagnostics for at most n units.
     -w, --watch           Recheck whenever an active dependency changes.
     -h, --help            Show this help without loading configuration.
     -v, --version         Show the package version without loading configuration.
