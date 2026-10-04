@@ -461,6 +461,10 @@ export namespace EvidenceCheckProgrammer {
    * Both acknowledgement and review diagnostics retain the authored location,
    * host, and target so a caller can repair configuration or source text
    * without inferring which pre-resolution applicability decision failed.
+   *
+   * Only an empty position set is reported. An annotation that another claim
+   * owns has no entry after ownership is settled, so it is not a participation
+   * error of this claim.
    */
   function reportNonParticipating(
     inventory: IEvidenceInventory,

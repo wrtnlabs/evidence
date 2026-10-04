@@ -40,8 +40,10 @@ export interface IEvidenceClaimContext {
   /**
    * Reference positions to which each acknowledgement applies for coverage.
    *
-   * The set preserves repeated reference boundaries. An absent entry means the
-   * declaration is not eligible to satisfy any reference under this claim.
+   * The set preserves repeated reference boundaries. An absent entry means
+   * another claim that reads the same annotation owns it, so this claim neither
+   * evaluates nor reports it. An empty set means no reference of this claim can
+   * interpret the annotation and no other claim owns it.
    */
   readonly declarations: Map<string, Set<number>>;
 
@@ -50,7 +52,8 @@ export interface IEvidenceClaimContext {
    *
    * A review can target a reference without being an acknowledgement. Keeping
    * its index separately prevents review metadata from changing coverage
-   * counts.
+   * counts. Absent and empty entries follow the same ownership meaning as
+   * {@link declarations}.
    */
   readonly reviews: Map<string, Set<number>>;
 }

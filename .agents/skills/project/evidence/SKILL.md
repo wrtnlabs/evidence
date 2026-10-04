@@ -19,7 +19,7 @@ Store explicit parent identities and segmented accessors. A dotted string is not
 
 Every artifact family supports both Claim and Reference roles, and every claim can reference any family. Every claim/reference pair is an independent obligation, including repeated reference-array elements. Names label diagnostics; they do not merge coverage. Start from complete selected populations, including hosts without tags.
 
-Claims may select the same host files and then read the same annotations. A claim disowns an annotation when another active claim's reference resolves it further (`EvidenceStatementOwnership`); a citation that no claim accepts still fails in every claim that reads it.
+Claims may select the same host files and then read the same annotations. A claim disowns an annotation when another active claim's reference resolves it further and reports at least the same severity, or resolves it cleanly (`EvidenceStatementOwnership`); a citation that no claim accepts still fails in every claim that reads it.
 
 ## Tags And Hosts
 
