@@ -14,17 +14,17 @@ catalogs:
       specifier: ^13.0.2
       version: 13.0.2
     '@typia/interface':
-      specifier: ^14.0.6
-      version: 14.0.6
+      specifier: ^15.1.0
+      version: 15.1.0
     '@typia/utils':
-      specifier: ^14.0.6
-      version: 14.0.6
+      specifier: ^15.1.0
+      version: 15.1.0
     tstl:
       specifier: ^3.0.0
       version: 3.0.0
     typia:
-      specifier: ^14.0.6
-      version: 14.0.6
+      specifier: ^15.1.0
+      version: 15.1.0
   tree-sitter:
     web-tree-sitter:
       specifier: 0.27.0
@@ -101,16 +101,16 @@ importers:
         version: 7.10.0-2.d0368e25c88e68caa4d283b5f2d88d1b76ed9356
       '@typia/interface':
         specifier: catalog:samchon
-        version: 14.0.6
+        version: 15.1.0
       '@typia/utils':
         specifier: catalog:samchon
-        version: 14.0.6
+        version: 15.1.0
       tstl:
         specifier: catalog:samchon
         version: 3.0.0
       typia:
         specifier: catalog:samchon
-        version: 14.0.6(ttsc@0.30.1)
+        version: 15.1.0(ttsc@0.30.1)
       web-tree-sitter:
         specifier: catalog:tree-sitter
         version: 0.27.0
@@ -157,7 +157,7 @@ importers:
         version: 22.20.2
       '@typia/utils':
         specifier: catalog:samchon
-        version: 14.0.6
+        version: 15.1.0
       ttsc:
         specifier: catalog:typescript
         version: 0.30.1
@@ -166,7 +166,7 @@ importers:
         version: 7.0.2
       typia:
         specifier: catalog:samchon
-        version: 14.0.6(ttsc@0.30.1)
+        version: 15.1.0(ttsc@0.30.1)
 
 packages:
 
@@ -429,8 +429,14 @@ packages:
   '@typia/interface@14.0.6':
     resolution: {integrity: sha512-Ct4cW8vt1OfZNFlRBrVFeWZZrM/KvNUg4bmeIU4amXgYYp1sZkY71h+6GdrL+ApdF0KNnRxZ92hrrlbDodsjNg==}
 
+  '@typia/interface@15.1.0':
+    resolution: {integrity: sha512-kiKKWTAmJ8x48eUAkzTwH4AsX3CSe5AcsxGUkzkOqhqwlklxUWIACw93DXTr2F5aDIse3YBExJerWdgURsring==}
+
   '@typia/utils@14.0.6':
     resolution: {integrity: sha512-g1LLQiOdPNyFR6dEQKsaa8HQnpZAAW+XAG0tVQ3/fVCARR5n4Yn59jBSI1UcNEv4F9DaM7vzHZi0b4iS+liajw==}
+
+  '@typia/utils@15.1.0':
+    resolution: {integrity: sha512-9NLCbKI2rQOA4M9EbEx0HwXfKIUIdkvO2J+6mZQttx2CBfiIspgt0VdJSvmD0hqMKa6LvDdmeBKl13wTizVGog==}
 
   acorn@8.16.0:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
@@ -695,8 +701,8 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
-  typia@14.0.6:
-    resolution: {integrity: sha512-dWtC9sMgmlR26yms6BAHWO0/P4Vzfw/cs1Mg+ZRYFlGub1CXRnF343EVgoZcxQdzoaPh50nTOtgd2Oaym73pIg==}
+  typia@15.1.0:
+    resolution: {integrity: sha512-EW+b8jxKrRU/Q0eJXFry53vL6LFRlAMsSvfhKq3hh4pLTiswBWJMs6g4AtNlCPGCYJ0WMbSEME2qqe8DM7PnHg==}
     peerDependencies:
       ttsc: '>=0.19.2'
     peerDependenciesMeta:
@@ -921,9 +927,15 @@ snapshots:
 
   '@typia/interface@14.0.6': {}
 
+  '@typia/interface@15.1.0': {}
+
   '@typia/utils@14.0.6':
     dependencies:
       '@typia/interface': 14.0.6
+
+  '@typia/utils@15.1.0':
+    dependencies:
+      '@typia/interface': 15.1.0
 
   acorn@8.16.0: {}
 
@@ -1260,10 +1272,10 @@ snapshots:
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
 
-  typia@14.0.6(ttsc@0.30.1):
+  typia@15.1.0(ttsc@0.30.1):
     dependencies:
-      '@typia/interface': 14.0.6
-      '@typia/utils': 14.0.6
+      '@typia/interface': 15.1.0
+      '@typia/utils': 15.1.0
       randexp: 0.5.3
     optionalDependencies:
       ttsc: 0.30.1
