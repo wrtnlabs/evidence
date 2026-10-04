@@ -1,7 +1,7 @@
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import typia from "typia";
-import type { TypeGuardError } from "typia";
+import type { IValidation } from "typia";
 
 import { createEvidenceConfigPlan } from "../internal/createEvidenceConfigPlan";
 import { EvidenceConfigFormat } from "../internal/EvidenceConfigFormat";
@@ -131,7 +131,11 @@ async function evaluateResolvedConfig(
       ? JSON.parse((await readFile(filename, "utf8")).replace(/^\uFEFF/u, ""))
       : await evaluateTypeScriptConfig(filename);
   validateArtifactTypes(value);
-  return typia.assert<IEvidenceConfig>(value, configurationShapeError);
+  const validation: IValidation<IEvidenceConfig> =
+    typia.validate<IEvidenceConfig>(value);
+  if (validation.success === false)
+    throw new Error(validation.errors.map(configurationShapeError).join("\n"));
+  return validation.data;
 }
 
 /**
@@ -203,21 +207,19 @@ function unknownArray(value: unknown): unknown[] | undefined {
 }
 
 /**
- * Converts generated shape-validation details into an author-facing
- * configuration error.
+ * Converts each generated shape-validation error into an author-facing
+ * configuration message.
  *
  * The message removes the validator's synthetic root name and distinguishes a
  * missing value from a wrong type without serializing arbitrary configuration
  * data.
  */
-function configurationShapeError(props: TypeGuardError.IProps): Error {
-  const path = (props.path ?? "$input").replace(/^\$input\.?/u, "");
-  const location = path === "" ? "configuration" : path;
-  const received =
-    props.value === undefined
+function configurationShapeError(error: IValidation.IError): string {
+  const path: string = error.path.replace(/^\$input\.?/u, "");
+  const location: string = path === "" ? "configuration" : path;
+  const received: string =
+    error.value === undefined
       ? "the value is missing"
       : "the value has another type";
-  return new Error(
-    `Invalid Evidence configuration at ${location}: expected ${props.expected}; ${received}.`,
-  );
+  return `Invalid Evidence configuration at ${location}: expected ${error.expected}; ${received}.`;
 }
