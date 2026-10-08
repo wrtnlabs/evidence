@@ -3,6 +3,7 @@ import type {
   IEvidenceCheckReport,
   IEvidenceCommandResult,
   IEvidenceConfig,
+  IEvidenceDiagnostic,
 } from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import { dedent } from "@typia/utils";
@@ -204,7 +205,8 @@ export async function test_command_only_selection(): Promise<void> {
         TestValidator.predicate(
           "selection diagnostic",
           failed.diagnostics.some(
-            (diagnostic): boolean => diagnostic.code === "check-only-target",
+            (diagnostic: IEvidenceDiagnostic): boolean =>
+              diagnostic.code === "check-only-target",
           ),
         );
       }

@@ -1,5 +1,8 @@
 import { EvidenceCommand, EvidenceCommandError } from "@wrtnlabs/evidence";
-import type { IEvidenceCheckCommand } from "@wrtnlabs/evidence";
+import type {
+  IEvidenceCheckCommand,
+  IEvidenceCommand,
+} from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import assert from "node:assert/strict";
 
@@ -69,5 +72,8 @@ export function test_command_only_parse(): void {
     ["graph", "--shallow"],
     ["inspect", "one.md#first", "--only", "two.md#second"],
   ])
-    assert.throws(() => EvidenceCommand.parse(args), EvidenceCommandError);
+    assert.throws(
+      (): IEvidenceCommand => EvidenceCommand.parse(args),
+      EvidenceCommandError,
+    );
 }
