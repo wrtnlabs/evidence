@@ -1,6 +1,6 @@
 {
   "name": "@wrtnlabs/evidence",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Explicit evidence obligations for specifications, skills, code, and tests across languages.",
   "main": "./src/index.ts",
   "exports": {
