@@ -482,9 +482,23 @@ Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` 
 | `-o, --output <path>` | Write the result to a file and keep stdout empty. |
 | `--language`, `--kind` | Filter `list` rows after the full check. |
 | `--limit <n>`, `--unit <n>` | Print at most `n` `check` diagnostics, or only those of the first `n` units (for example Markdown headings), each with all its diagnostics. Counts, status, and exit code still cover the whole analysis, and the report states how many diagnostics were omitted. |
+| `--only <target...>` | Restrict `check` outcomes to these configured units and their descendants. Counts, diagnostics, and exit code describe the selected scope. |
+| `--shallow` | With `--only`, check the named units themselves and omit their descendants. |
 | `-w, --watch` | Recheck `check` when a dependency changes; NDJSON with `--format json`. |
 
 Exit 0 is a complete analysis without errors, 1 is a complete analysis with violations, 2 is an invalid command or incomplete analysis. JSON reports carry `schemaVersion: 1`.
+
+Use `--only` with one or more targets printed by `evidence list`, using the same addressing rules as `evidence inspect`. Markdown targets are relative to the configured reference root; programming targets are relative to `--cwd`. Prisma and Swagger retain their artifact-specific target forms.
+
+```bash
+npx @wrtnlabs/evidence --only requirements.md#pricing requirements.md#refund
+npx @wrtnlabs/evidence check --only requirements.md#pricing --shallow
+npx @wrtnlabs/evidence check --only src/calculator.ts#calculate --watch
+```
+
+Reference targets check incoming evidence coverage and related exclusion, cardinality, and review policies. Claim targets check their outgoing annotations and host policies. Selection respects configured symbol kinds and follows structural parent links; aliases and overlapping targets do not duplicate a unit within one obligation. A shallow target must itself be selected by configuration. Unknown, hidden, ambiguous, or incomplete targets fail visibly.
+
+The checker still loads configured populations and evaluates policy with their full context. Selecting one target cannot conceal duplicate evidence, change a review fingerprint, or make a host that cites several units satisfy `singleEvidencePerSymbol`. Unrelated unit findings are omitted, while incomplete participating inventories still prevent success. `--limit`, `--unit`, and configured report bounds apply to the focused result after checking.
 
 Watch repeats implicit configuration discovery on each evaluation and observes changes to the preferred `evidence.config.ts` entry. A broken entry fails visibly until repaired or removed. Explicit `--config` paths stay fixed and report deletion instead of switching to a default. The watcher captures its working directory when constructed; embedding callers may supply `IEvidenceWatchOptions.cwd`.
 

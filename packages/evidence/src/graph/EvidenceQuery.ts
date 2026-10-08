@@ -1,7 +1,9 @@
 import path from "node:path";
 import type { IEvidenceQueryContext } from "../contexts/IEvidenceQueryContext";
 import { EvidenceQueryProgrammer } from "../programmers/EvidenceQueryProgrammer";
+import { EvidenceUnitCheckProgrammer } from "../programmers/EvidenceUnitCheckProgrammer";
 import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
+import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import type { IEvidenceGraphReport } from "../structures/IEvidenceGraphReport";
 import type { IEvidenceInspectReport } from "../structures/IEvidenceInspectReport";
 import type { IEvidenceLanguagesReport } from "../structures/IEvidenceLanguagesReport";
@@ -108,6 +110,39 @@ export class EvidenceQuery {
     target: string,
   ): Promise<IEvidenceInspectReport> {
     return new EvidenceQuery(analysis, cwd).inspect(target);
+  }
+
+  /**
+   * Projects the captured check onto selected targets and their descendants.
+   *
+   * Shallow omits descendants. Reference targets retain incoming coverage and
+   * claim targets retain outgoing annotations and host policies. Full policy
+   * context is preserved; counts and exit status describe the focused outcome.
+   * This query performs no new source extraction or graph evaluation.
+   */
+  public async check(
+    targets: readonly string[],
+    shallow: boolean = false,
+  ): Promise<IEvidenceCheckReport> {
+    const selected: string[] = [...targets];
+    return structuredClone(
+      await EvidenceUnitCheckProgrammer.check(this.context, selected, shallow),
+    );
+  }
+
+  /**
+   * Focuses a check through an independently captured query snapshot.
+   *
+   * Uses inspect's target grammar and the supplied cwd. Unknown, hidden,
+   * ambiguous, and incomplete requests return failing check reports.
+   */
+  public static async check(
+    analysis: IEvidenceCheckAnalysis,
+    cwd: string,
+    targets: readonly string[],
+    shallow: boolean = false,
+  ): Promise<IEvidenceCheckReport> {
+    return new EvidenceQuery(analysis, cwd).check(targets, shallow);
   }
 
   /**

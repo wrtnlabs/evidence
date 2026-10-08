@@ -70,4 +70,20 @@ export interface IEvidenceCheckCommand {
    * Omission prints diagnostics for every unit.
    */
   unit?: number;
+
+  /**
+   * Targets limiting the check to named semantic units.
+   *
+   * Omission checks every configured unit. Targets use inspect's artifact
+   * addressing rules and include configured descendants unless shallow is true.
+   * Aliases select an identity once within each independent obligation.
+   */
+  only?: string[];
+
+  /**
+   * Restricts an only-selection to its named identities.
+   *
+   * Requires only targets. Omission includes their configured descendants.
+   */
+  shallow?: true;
 }

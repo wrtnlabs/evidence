@@ -5,6 +5,7 @@ import {
 import type {
   IEvidenceHost,
   IEvidenceTargetStatement,
+  IEvidenceTargetResolution,
 } from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import { randomUUID } from "node:crypto";
@@ -19,8 +20,9 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * Missing, unselected, malformed, unsupported, withdrawn, ambiguous, and
  * incomplete addresses require different diagnostics and recovery behavior.
  *
- * 1. Resolve an existing unselected file, a missing file, malformed programming
- *    spellings, and a host without a supported attachment.
+ * 1. Resolve an existing unselected file, a missing file, a file without a file
+ *    unit, malformed programming spellings, and a host without a supported
+ *    attachment.
  * 2. Verify their distinct statuses instead of allowing a guessed edge.
  * 3. Resolve an internal declaration, competing star exports, and an export graph
  *    with a missing source name; require withdrawal metadata, ambiguity, and an
@@ -66,6 +68,16 @@ export async function test_target_failures(): Promise<void> {
         "out-of-population",
       );
       TestValidator.equals("missing file", missing.status, "missing-file");
+      const fileOnly: IEvidenceTargetResolution = await resolver.resolve(
+        createStatement("../src/selected.ts", root),
+        host,
+        ids,
+      );
+      TestValidator.equals(
+        "file without a file unit",
+        fileOnly.status,
+        "missing-member",
+      );
 
       // Programming target syntax is validated after the reference kind is known.
       const malformedPercent = await resolver.resolve(

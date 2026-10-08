@@ -96,6 +96,31 @@ export namespace EvidenceCheckProgrammer {
   }
 
   /**
+   * Summarizes retained report boundaries and findings.
+   *
+   * Full and focused checks share active-obligation and severity aggregation;
+   * presentation windows are applied after these totals are established.
+   */
+  export function summarize(
+    claims: IEvidenceCheckClaim[],
+    diagnostics: IEvidenceDiagnostic[],
+  ): IEvidenceCheckCounts {
+    return checkCounts(claims, diagnostics);
+  }
+
+  /**
+   * Orders findings by configured boundary, source coordinate, and identity.
+   *
+   * Returns a new array so focused checks can merge resolution failures without
+   * changing the original graph report's deterministic diagnostic order.
+   */
+  export function orderDiagnostics(
+    diagnostics: IEvidenceDiagnostic[],
+  ): IEvidenceDiagnostic[] {
+    return [...diagnostics].sort(compareDiagnostics);
+  }
+
+  /**
    * Loads a claim inventory and every reference inventory declared beneath it.
    *
    * All paths are resolved from the single configuration file, even though the
@@ -510,7 +535,9 @@ export namespace EvidenceCheckProgrammer {
     graph: IEvidenceGraphResult,
   ): IEvidenceCheckReport {
     const claims = checkClaims(plan, graph);
-    const diagnostics = [...graph.diagnostics].sort(compareDiagnostics);
+    const diagnostics: IEvidenceDiagnostic[] = orderDiagnostics(
+      graph.diagnostics,
+    );
     const complete = graph.claims.every(
       (claim) =>
         !claim.active ||
@@ -519,7 +546,7 @@ export namespace EvidenceCheckProgrammer {
             (obligation) => !obligation.active || obligation.complete,
           )),
     );
-    const counts = checkCounts(claims, diagnostics);
+    const counts: IEvidenceCheckCounts = summarize(claims, diagnostics);
     const success = complete && counts.errors === 0;
     return {
       schemaVersion: 1,

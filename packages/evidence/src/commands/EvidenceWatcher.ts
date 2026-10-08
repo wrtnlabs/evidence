@@ -17,6 +17,7 @@ import type { IEvidenceWatchOptions } from "../structures/IEvidenceWatchOptions"
 import type { EvidenceWatchPublisher } from "../typings/EvidenceWatchPublisher";
 import { EvidenceChecker } from "../EvidenceChecker";
 import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
+import { EvidenceQuery } from "../graph/EvidenceQuery";
 
 /**
  * Rechecks active dependencies and publishes stable results in sequence.
@@ -59,6 +60,21 @@ export class EvidenceWatcher {
    * Later process cwd changes cannot redirect selection or dependency scans.
    */
   private readonly cwd: string;
+
+  /**
+   * Target spellings captured for each cycle's focused report.
+   *
+   * Omission publishes full checks. Copying prevents caller mutation from
+   * changing the watch selection after construction.
+   */
+  private readonly only: string[] | undefined;
+
+  /**
+   * Whether focused reports omit descendants of the named targets.
+   *
+   * Applies only when an only-selection was supplied.
+   */
+  private readonly shallow: boolean;
 
   /**
    * Interval between dependency snapshots during idle observation.
@@ -146,7 +162,11 @@ export class EvidenceWatcher {
     options: IEvidenceWatchOptions = {},
   ) {
     const checked: IEvidenceWatchOptions = typia.assert(options);
+    if (checked.shallow === true && checked.only === undefined)
+      throw new Error("Shallow watch selection requires only targets.");
     this.cwd = path.resolve(checked.cwd ?? process.cwd());
+    this.only = checked.only === undefined ? undefined : [...checked.only];
+    this.shallow = checked.shallow === true;
     this.configFile =
       configFile === undefined ? undefined : path.resolve(this.cwd, configFile);
     this.pollIntervalMilliseconds = checked.pollIntervalMilliseconds ?? 250;
@@ -290,6 +310,13 @@ export class EvidenceWatcher {
       try {
         if (beforeConfig.configFile === undefined) throw beforeConfig.cause;
         analysis = await EvidenceChecker.analyze(beforeConfig.configFile);
+        if (this.only !== undefined)
+          analysis.report = await EvidenceQuery.check(
+            analysis,
+            this.cwd,
+            this.only,
+            this.shallow,
+          );
       } catch (cause) {
         analysisCause = cause;
       }
