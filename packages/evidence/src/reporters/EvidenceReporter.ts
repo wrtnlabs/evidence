@@ -82,6 +82,11 @@ export namespace EvidenceReporter {
     const lines: string[] = [
       `Evidence Graph check ${report.status}.`,
       `Config: ${report.configFile}`,
+      ...(report.only === undefined
+        ? []
+        : [
+            `Only: ${report.only.join(", ")}${report.shallow === true ? " (shallow)" : " (including descendants)"}.`,
+          ]),
       `Claims: ${counts.activeClaims}/${counts.claims} active.`,
       `Obligations: ${counts.activeObligations}/${counts.obligations} active, ${counts.incompleteObligations} incomplete.`,
       `Coverage: ${counts.coveredUnits}/${counts.units} units covered, ${counts.missingUnits} missing.`,

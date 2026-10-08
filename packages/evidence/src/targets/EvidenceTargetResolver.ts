@@ -577,11 +577,14 @@ export class EvidenceTargetResolver {
    * Formats the representative accessor after candidate paths share its
    * segments.
    *
-   * An empty array occurs only in defensive failure construction and
-   * deliberately produces an empty display rather than inventing an accessor.
+   * Missing candidates and file-only addresses have no accessor. Their display
+   * stays empty rather than passing an empty segment list to the accessor
+   * formatter.
    */
   private accessor(addresses: IEvidenceAddress[]): string {
-    const first = addresses[0];
-    return first === undefined ? "" : EvidenceAccessor.format(first.segments);
+    const first: IEvidenceAddress | undefined = addresses[0];
+    return first === undefined || first.segments.length === 0
+      ? ""
+      : EvidenceAccessor.format(first.segments);
   }
 }

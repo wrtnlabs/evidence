@@ -17,6 +17,22 @@ export interface IEvidenceWatchOptions {
   cwd?: string;
 
   /**
+   * Targets whose check outcomes are published on each stable cycle.
+   *
+   * Uses inspect's addressing rules with paths anchored at cwd. Omission
+   * publishes the full check; dependency observation always retains full
+   * inputs.
+   */
+  only?: string[] & tags.MinItems<1>;
+
+  /**
+   * Omits descendants from the only-target selection.
+   *
+   * Requires only targets. Omission includes configured descendants.
+   */
+  shallow?: true;
+
+  /**
    * Positive delay between dependency snapshots, in milliseconds.
    *
    * Shorter intervals detect changes sooner while performing filesystem

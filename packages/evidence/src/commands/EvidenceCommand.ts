@@ -15,6 +15,7 @@ import { EvidenceArtifactTypes } from "../internal/EvidenceArtifactTypes";
 import { EvidenceConfigFormat } from "../internal/EvidenceConfigFormat";
 import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
 import type { IEvidenceConfig } from "../structures/IEvidenceConfig";
+import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import { EvidenceTreeSitterAssetScope } from "../internal/EvidenceTreeSitterAssetScope";
 import type { IEvidencePackageManifest } from "../internal/IEvidencePackageManifest";
 import type { IEvidenceCheckCommand } from "../structures/IEvidenceCheckCommand";
@@ -53,10 +54,10 @@ export namespace EvidenceCommand {
    *
    * Parsing assigns operation-specific defaults and rejects unknown, duplicate,
    * or incompatible options before any filesystem access. `check` is implicit
-   * when the first token is absent or an option; `inspect` alone accepts one
-   * positional target. Callers receive an {@link EvidenceCommandError} for
-   * repairable syntax mistakes rather than a configuration or source
-   * diagnostic.
+   * when the first token is absent or an option; `inspect` accepts one
+   * positional target and check's `--only` consumes targets until the next
+   * option. Callers receive an {@link EvidenceCommandError} for repairable
+   * syntax mistakes rather than a configuration or source diagnostic.
    *
    * @example
    *   EvidenceCommand.parse(["graph", "--format", "dot"]);
@@ -83,7 +84,9 @@ export namespace EvidenceCommand {
         "The version flag cannot be combined with a command or other options.",
       );
 
-    const values = new Map<string, string>();
+    const values: Map<string, string> = new Map();
+    let only: string[] | undefined;
+    let shallow: boolean = false;
     let target: string | undefined;
     let watch = false;
     for (let index = 0; index < tokens.length; index++) {
@@ -100,6 +103,38 @@ export namespace EvidenceCommand {
         if (watch)
           throw new EvidenceCommandError("The watch flag was provided twice.");
         watch = true;
+        continue;
+      }
+      if (token === "--shallow") {
+        if (operation !== "check")
+          throw new EvidenceCommandError(
+            "--shallow is available only to evidence check.",
+          );
+        if (shallow)
+          throw new EvidenceCommandError(
+            "The shallow flag was provided twice.",
+          );
+        shallow = true;
+        continue;
+      }
+      if (token === "--only") {
+        if (operation !== "check")
+          throw new EvidenceCommandError(
+            "--only is available only to evidence check.",
+          );
+        if (only !== undefined)
+          throw new EvidenceCommandError("Option '--only' was provided twice.");
+        only = [];
+        while (index + 1 < tokens.length) {
+          const value: string | undefined = tokens[index + 1];
+          if (value === undefined || value.startsWith("-")) break;
+          if (value === "")
+            throw new EvidenceCommandError("Option '--only' cannot be empty.");
+          only.push(value);
+          index++;
+        }
+        if (only.length === 0)
+          throw new EvidenceCommandError("Option '--only' requires a target.");
         continue;
       }
       if (!token.startsWith("-")) {
@@ -134,6 +169,8 @@ export namespace EvidenceCommand {
       values.set(key, value);
     }
 
+    if (shallow && only === undefined)
+      throw new EvidenceCommandError("--shallow requires --only targets.");
     const cwd = values.get("cwd") ?? ".";
     if (operation === "init")
       return {
@@ -213,6 +250,8 @@ export namespace EvidenceCommand {
       ...(watch ? { watch: true } : {}),
       ...(limit === undefined ? {} : { limit }),
       ...(unit === undefined ? {} : { unit }),
+      ...(only === undefined ? {} : { only }),
+      ...(shallow ? { shallow: true } : {}),
     };
   }
 
@@ -377,7 +416,11 @@ async function runWatch(
     );
   }
 
-  const watcher: EvidenceWatcher = new EvidenceWatcher(configFile, { cwd });
+  const watcher: EvidenceWatcher = new EvidenceWatcher(configFile, {
+    cwd,
+    ...(command.only === undefined ? {} : { only: command.only }),
+    ...(command.shallow === undefined ? {} : { shallow: command.shallow }),
+  });
   const interrupt = (): void => {
     void watcher.close();
   };
@@ -443,17 +486,27 @@ async function runAnalysis(
   try {
     configFile = await EvidenceConfigLoader.locate(command.config, cwd);
     const analysis = await new EvidenceChecker(configFile).analyze();
-    if (command.operation === "check")
+    if (command.operation === "check") {
+      const report: IEvidenceCheckReport =
+        command.only === undefined
+          ? analysis.report
+          : await EvidenceQuery.check(
+              analysis,
+              cwd,
+              command.only,
+              command.shallow === true,
+            );
       return writeReport(
         command.output,
         cwd,
-        EvidenceReporter.render(analysis.report, command.format, {
+        EvidenceReporter.render(report, command.format, {
           ...(command.limit === undefined ? {} : { limit: command.limit }),
           ...(command.unit === undefined ? {} : { unit: command.unit }),
         }),
-        analysis.report.exitCode,
+        report.exitCode,
         false,
       );
+    }
     // Query projections reuse the captured inventory and diagnostics. Reanalyzing
     // here could make a report disagree with the command's check boundary.
     const query = new EvidenceQuery(analysis, cwd);
@@ -820,6 +873,8 @@ const HELP = dedent`
         --kind <symbol>   Filter the Evidence Graph list by symbol kind.
         --limit <n>       Print at most n check diagnostics; counts stay complete.
         --unit <n>        Print diagnostics for at most n units.
+        --only <targets...> Check only these units and their descendants.
+        --shallow         With --only, omit descendants of the named units.
     -w, --watch           Recheck whenever an active dependency changes.
     -h, --help            Show this help without loading configuration.
     -v, --version         Show the package version without loading configuration.

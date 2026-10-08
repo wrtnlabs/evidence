@@ -99,4 +99,19 @@ export interface IEvidenceCheckReport {
    * the configuration requested no narrowing.
    */
   bounds?: IEvidenceConfigReport;
+
+  /**
+   * Authored targets used to restrict this check's outcome.
+   *
+   * Omission describes the full configured check. When present, counts and exit
+   * status describe selected units while policy retains its full context.
+   */
+  only?: string[];
+
+  /**
+   * Whether only-targets exclude descendants from the focused check.
+   *
+   * Omission includes descendants when only is present.
+   */
+  shallow?: true;
 }
