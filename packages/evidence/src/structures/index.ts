@@ -4,6 +4,7 @@ export type * from "./IEvidenceCommentSyntax";
 export type * from "./IEvidenceDeclaration";
 export type * from "./IEvidenceDiagnostic";
 export type * from "./IEvidenceDiagnosticContext";
+export type * from "./IEvidenceReportPage";
 export type * from "./IEvidenceDocumentation";
 export type * from "./IEvidenceHost";
 export type * from "./IEvidenceInventory";

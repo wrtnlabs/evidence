@@ -80,6 +80,13 @@ export interface IEvidenceCheckCommand {
   limit?: number;
 
   /**
+   * One-based finite diagnostic page under an effective limit.
+   *
+   * Omission requests page one when a limit is configured or supplied.
+   */
+  page?: number;
+
+  /**
    * Maximum number of units whose diagnostics are printed.
    *
    * Omission prints diagnostics for every unit.

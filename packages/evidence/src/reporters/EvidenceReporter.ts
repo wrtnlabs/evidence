@@ -1,6 +1,7 @@
 import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
 import type { IEvidenceConfigReport } from "../structures/IEvidenceConfigReport";
+import type { IEvidenceReportPage } from "../structures/IEvidenceReportPage";
 import type { EvidenceReportFormat } from "../typings/EvidenceReportFormat";
 
 /**
@@ -24,7 +25,8 @@ export namespace EvidenceReporter {
    * Selects the requested representation of a completed report object.
    *
    * The returned string includes its final newline and is ready for a stream or
-   * output file. This function performs no I/O.
+   * output file. An effective limit selects page one by default; a supplied
+   * page selects another one-based group. This function performs no I/O.
    *
    * @evidence contracts/common.md#principled-implementation The requested format selects json or text, each ending with a newline.
    * @evidence contracts/common.md#clear-and-simple-design Render only dispatches.
@@ -38,8 +40,14 @@ export namespace EvidenceReporter {
     report: IEvidenceCheckReport,
     format: EvidenceReportFormat,
     window: IEvidenceConfigReport = {},
+    page?: number,
   ): string {
-    const bounded: IEvidenceCheckReport = narrow(report, window);
+    const effectiveLimit: number | undefined = window.limit ?? report.bounds?.limit;
+    const bounded: IEvidenceCheckReport = narrow(
+      report,
+      window,
+      page ?? (effectiveLimit === undefined ? undefined : 1),
+    );
     return format === "json" ? json(bounded) : text(bounded);
   }
 
@@ -47,24 +55,32 @@ export namespace EvidenceReporter {
    * Withholds diagnostics beyond the requested unit and count bounds.
    *
    * Units are admitted in order of their first diagnostic, and findings naming
-   * no unit stay eligible. Counts, status, and exit code are copied unchanged
-   * so the omission cannot make a failing check look clean.
+   * no unit stay eligible. A supplied one-based page slices that eligible set
+   * by the effective limit and records both full and eligible totals. Counts,
+   * status, and exit code are copied unchanged so an empty page cannot make a
+   * failing check look clean. Omitting page retains the prefix window.
    *
-   * @evidence contracts/common.md#principled-implementation Command bounds override configured bounds one by one; units are admitted by first diagnostic, unit-less findings stay eligible, and the limit applies after.
+   * @evidence contracts/common.md#principled-implementation Command bounds override configured bounds one by one; units are admitted by first diagnostic, unit-less findings stay eligible, and a one-based page slices the limit-sized eligible sequence.
    * @evidence contracts/common.md#clear-and-simple-design Narrowing returns a new report and leaves rendering to render.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Counts, status and exit code are copied unchanged and omissions are counted, so a narrowed report cannot look clean.
-   * @evidence contracts/common.md#meaningful-documentation The comment explains admission order and preserved totals; the inline comment explains override precedence.
-   * @evidence contracts/performance.md#efficient-algorithms Linear in diagnostics with constant-time set lookups.
+   * @evidence contracts/common.md#meaningful-documentation The comment explains admission order, one-based paging, legacy unpaged calls and preserved totals; the inline comment explains override precedence.
+   * @evidence contracts/performance.md#efficient-algorithms Linear in diagnostics with constant-time set lookups; only eligible diagnostics are sliced.
    * @evidenceExclude contracts/performance.md#reuse-equivalent-work Each report is narrowed once per output.
    * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources It returns the original or a shallow copy; nothing is retained.
    */
   export function narrow(
     report: IEvidenceCheckReport,
     window: IEvidenceConfigReport,
+    page?: number,
   ): IEvidenceCheckReport {
     // Command options override the configuration's bounds one by one.
     const limit: number | undefined = window.limit ?? report.bounds?.limit;
     const units: number | undefined = window.unit ?? report.bounds?.unit;
+    if (
+      page !== undefined &&
+      (limit === undefined || !Number.isSafeInteger(page) || page < 1)
+    )
+      throw new Error("A one-based page requires an effective diagnostic limit.");
     if (limit === undefined && units === undefined) return report;
     const admitted: Set<string> = new Set();
     const selected: IEvidenceDiagnostic[] = [];
@@ -76,12 +92,43 @@ export namespace EvidenceReporter {
       }
       selected.push(diagnostic);
     }
+    const totalPages: number =
+      limit === undefined ? 1 : Math.max(1, Math.ceil(selected.length / limit));
+    const start: number =
+      page !== undefined && page <= totalPages ? (page - 1) * (limit ?? 0) : 0;
     const diagnostics: IEvidenceDiagnostic[] =
-      limit === undefined ? selected : selected.slice(0, limit);
+      limit === undefined
+        ? selected
+        : page === undefined
+          ? selected.slice(0, limit)
+          : page > totalPages
+            ? []
+            : selected.slice(start, start + limit);
     const omitted: number = report.diagnostics.length - diagnostics.length;
-    return omitted === 0
+    const metadata: IEvidenceReportPage | undefined =
+      page === undefined || limit === undefined
+        ? undefined
+        : {
+            schemaVersion: 1,
+            page,
+            limit,
+            totalPages,
+            totalDiagnostics: report.diagnostics.length,
+            eligibleDiagnostics: selected.length,
+            hasPrevious: page > 1 && page - 1 <= totalPages,
+            hasNext: page < totalPages,
+            ...(diagnostics.length === 0
+              ? {}
+              : { start: start + 1, end: start + diagnostics.length }),
+          };
+    return omitted === 0 && metadata === undefined
       ? report
-      : { ...report, diagnostics, omittedDiagnostics: omitted };
+      : {
+          ...report,
+          diagnostics,
+          ...(omitted === 0 ? {} : { omittedDiagnostics: omitted }),
+          ...(metadata === undefined ? {} : { page: metadata }),
+        };
   }
 
   /**
@@ -134,8 +181,18 @@ export namespace EvidenceReporter {
     ];
     if (report.omittedDiagnostics !== undefined)
       lines.push(
-        `Showing ${report.diagnostics.length} of ${report.diagnostics.length + report.omittedDiagnostics} diagnostics; ${report.omittedDiagnostics} omitted by --limit/--unit.`,
+        `Showing ${report.diagnostics.length} of ${report.diagnostics.length + report.omittedDiagnostics} diagnostics; ${report.omittedDiagnostics} omitted by --limit/--unit${report.page === undefined ? "" : "/--page"}.`,
       );
+    if (report.page !== undefined) {
+      const page: IEvidenceReportPage = report.page;
+      const range: string =
+        page.start === undefined
+          ? "empty"
+          : `diagnostics ${page.start}-${page.end ?? page.start}`;
+      lines.push(
+        `Page ${page.page} of ${page.totalPages} (limit ${page.limit}): ${range} of ${page.eligibleDiagnostics} eligible; ${page.totalDiagnostics} total; previous ${page.hasPrevious ? "yes" : "no"}, next ${page.hasNext ? "yes" : "no"}.`,
+      );
+    }
     for (const diagnostic of report.diagnostics)
       lines.push("", ...diagnosticLines(report, diagnostic));
     return lines.join("\n") + "\n";

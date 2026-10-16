@@ -15,6 +15,7 @@ import { EvidenceArtifactTypes } from "../internal/EvidenceArtifactTypes";
 import { EvidenceConfigFormat } from "../internal/EvidenceConfigFormat";
 import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
 import type { IEvidenceConfig } from "../structures/IEvidenceConfig";
+import type { IEvidenceConfigReport } from "../structures/IEvidenceConfigReport";
 import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import { EvidenceTreeSitterAssetScope } from "../internal/EvidenceTreeSitterAssetScope";
 import type { IEvidencePackageManifest } from "../internal/IEvidencePackageManifest";
@@ -64,7 +65,8 @@ export namespace EvidenceCommand {
    * or incompatible options before any filesystem access. `check` is implicit
    * when the first token is absent or an option; `inspect` accepts one
    * positional target and check's `--only` consumes targets until the next
-   * option. Callers receive an {@link EvidenceCommandError} for repairable
+   * option. Pages are one-based and require a finite check with an effective
+   * diagnostic limit. Callers receive an {@link EvidenceCommandError} for repairable
    * syntax mistakes rather than a configuration or source diagnostic.
    *
    * @example
@@ -202,6 +204,8 @@ export namespace EvidenceCommand {
       throw new EvidenceCommandError("--shallow requires --only targets.");
     if (watch && context)
       throw new EvidenceCommandError("--context cannot be used with --watch.");
+    if (watch && values.has("page"))
+      throw new EvidenceCommandError("--page cannot be used with --watch.");
     const cwd = values.get("cwd") ?? ".";
     if (operation === "init")
       return {
@@ -272,6 +276,10 @@ export namespace EvidenceCommand {
       "--unit",
       values.get("unit"),
     );
+    const page: number | undefined = positiveInteger(
+      "--page",
+      values.get("page"),
+    );
     return {
       operation,
       cwd,
@@ -281,6 +289,7 @@ export namespace EvidenceCommand {
       ...(watch ? { watch: true } : {}),
       ...(limit === undefined ? {} : { limit }),
       ...(unit === undefined ? {} : { unit }),
+      ...(page === undefined ? {} : { page }),
       ...(only === undefined ? {} : { only }),
       ...(shallow ? { shallow: true } : {}),
       ...(context ? { context: true } : {}),
@@ -553,26 +562,30 @@ async function runAnalysis(
               command.shallow === true,
               command.context === true,
             );
-      const window = {
+      const window: IEvidenceConfigReport = {
         ...(command.limit === undefined ? {} : { limit: command.limit }),
         ...(command.unit === undefined ? {} : { unit: command.unit }),
       };
-      const output: string =
+      const limit: number | undefined = command.limit ?? report.bounds?.limit;
+      if (command.page !== undefined && limit === undefined)
+        throw new EvidenceCommandError(
+          "--page requires --limit or a configured report.limit.",
+        );
+      const page: number | undefined =
+        limit === undefined ? undefined : (command.page ?? 1);
+      const bounded: IEvidenceCheckReport = EvidenceReporter.narrow(
+        report,
+        window,
+        page,
+      );
+      const presented: IEvidenceCheckReport =
         command.context === true
-          ? command.format === "json"
-            ? EvidenceReporter.json(
-                EvidenceQuery.context(
-                  analysis,
-                  EvidenceReporter.narrow(report, window),
-                ),
-              )
-            : EvidenceReporter.text(
-                EvidenceQuery.context(
-                  analysis,
-                  EvidenceReporter.narrow(report, window),
-                ),
-              )
-          : EvidenceReporter.render(report, command.format, window);
+          ? EvidenceQuery.context(analysis, bounded)
+          : bounded;
+      const output: string =
+        command.format === "json"
+          ? EvidenceReporter.json(presented)
+          : EvidenceReporter.text(presented);
       return writeReport(
         command.output,
         cwd,
@@ -772,6 +785,8 @@ function optionKey(token: string): string | undefined {
       return "kind";
     case "--limit":
       return "limit";
+    case "--page":
+      return "page";
     case "--unit":
       return "unit";
     default:
@@ -788,7 +803,8 @@ function optionKey(token: string): string | undefined {
  */
 function optionAllowed(operation: string, option: string): boolean {
   if (option === "cwd") return true;
-  if (option === "limit" || option === "unit") return operation === "check";
+  if (option === "limit" || option === "unit" || option === "page")
+    return operation === "check";
   if (operation === "init") return option === "config";
   if (operation === "languages")
     return option === "format" || option === "output";
@@ -826,7 +842,12 @@ function positiveInteger(
     throw new EvidenceCommandError(
       `Option '${flag}' requires a positive integer.`,
     );
-  return Number(value);
+  const number: number = Number(value);
+  if (!Number.isSafeInteger(number))
+    throw new EvidenceCommandError(
+      `Option '${flag}' requires a safe positive integer.`,
+    );
+  return number;
 }
 
 /**
@@ -946,6 +967,7 @@ const HELP = dedent`
         --language <type> Filter the Evidence Graph list by artifact type.
         --kind <symbol>   Filter the Evidence Graph list by symbol kind.
         --limit <n>       Print at most n check diagnostics; counts stay complete.
+        --page <n>        Select one-based diagnostic page; requires a limit.
         --unit <n>        Print diagnostics for at most n units.
         --context         Show missing Markdown reference sections.
         --only <targets...> Check only these units and their descendants.

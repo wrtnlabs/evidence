@@ -4,6 +4,7 @@ import type { IEvidenceCheckClaim } from "./IEvidenceCheckClaim";
 import type { IEvidenceCheckCounts } from "./IEvidenceCheckCounts";
 import type { IEvidenceConfigReport } from "./IEvidenceConfigReport";
 import type { IEvidenceDiagnostic } from "./IEvidenceDiagnostic";
+import type { IEvidenceReportPage } from "./IEvidenceReportPage";
 
 /**
  * Versioned coverage report shared by the checker and its output renderers.
@@ -99,6 +100,13 @@ export interface IEvidenceCheckReport {
    * withheld findings.
    */
   omittedDiagnostics?: number;
+
+  /**
+   * One-based finite diagnostic page when a limit is effective.
+   *
+   * Omission means the report is unpaged, including watch output.
+   */
+  page?: IEvidenceReportPage;
 
   /**
    * Printing bounds the configuration requested for this check.

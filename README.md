@@ -305,7 +305,7 @@ Incomplete analysis never passes as an empty population.
 
 Commands resolve configuration within the effective `--cwd` directory, preferring `evidence.config.ts`. An invalid, unreadable, directory or broken symlink at the preferred name remains an error; explicit paths never fall back. No-argument checker and loader APIs discover configuration in the current working directory. Roots remain relative to the selected physical configuration file. `init` defaults to creating `evidence.config.ts`.
 
-`report: { unit, limit }` bounds the diagnostics `check` prints by default: `unit` keeps every diagnostic of the first `unit` units, and `limit` keeps the first `limit` diagnostics. Both are positive integers, counts and exit code still cover the whole analysis, and the report states what it omitted. The `--unit` and `--limit` options override the configured values.
+`report: { unit, limit }` bounds the diagnostics `check` prints by default: `unit` keeps every diagnostic of the first `unit` units, and `limit` sets the page size. Both are positive integers, counts and exit code still cover the whole analysis, and the report states what it omitted. The `--unit` and `--limit` options override the configured values. Finite checks with an effective limit show page 1 unless `--page` selects another page.
 
 ### 4.1. Claim
 
@@ -507,6 +507,7 @@ Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` 
 | `-o, --output <path>` | Write the result to a file and keep stdout empty. |
 | `--language`, `--kind` | Filter `list` rows after the full check. |
 | `--limit <n>`, `--unit <n>` | Print at most `n` `check` diagnostics, or only those of the first `n` units (for example Markdown headings), each with all its diagnostics. Counts, status, and exit code still cover the whole analysis, and the report states how many diagnostics were omitted. |
+| `--page <n>` | Select one-based page `n` of finite `check` diagnostics after the `--unit` bound. Requires `--limit` or configured `report.limit`. The report shows eligible and full totals, page count, range, and previous/next availability; a page beyond the end is empty without changing the check result. |
 | `--context` | Show captured Markdown sections required by displayed missing acknowledgement or checklist errors. Each error includes at most eight sections, with at most 40 lines and 8,192 UTF-16 characters per section; truncation is reported. Available for finite `check` only. |
 | `--only <target...>` | Restrict `check` outcomes to these configured units and their descendants. Counts, diagnostics, and exit code describe the selected scope. |
 | `--shallow` | With `--only`, check the named units themselves and omit their descendants. |
@@ -520,6 +521,7 @@ Use `--only` with one or more targets printed by `evidence list`, using the same
 npx @wrtnlabs/evidence --only requirements.md#pricing requirements.md#refund
 npx @wrtnlabs/evidence check --only requirements.md#pricing --shallow
 npx @wrtnlabs/evidence check --only requirements.md#pricing --context
+npx @wrtnlabs/evidence check --only requirements.md#pricing --limit 5 --page 2
 npx @wrtnlabs/evidence check --only src/calculator.ts#calculate --watch
 ```
 

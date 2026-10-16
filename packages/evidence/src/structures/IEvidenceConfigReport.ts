@@ -21,10 +21,10 @@
  */
 export interface IEvidenceConfigReport {
   /**
-   * Maximum number of diagnostics to print, in report order.
+   * Maximum diagnostics per finite check page, in report order.
    *
-   * Omission prints every diagnostic selected by the other bound. A positive
-   * integer is required.
+   * Omission prints every diagnostic selected by the other bound. Watch output
+   * keeps the first bounded group. A positive integer is required.
    */
   limit?: number | undefined;
 
