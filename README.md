@@ -319,6 +319,7 @@ Commands resolve configuration within the effective `--cwd` directory, preferrin
 | `disabled` | `boolean` | `false` | Validates the shape but loads nothing. |
 | `root` | `string` | config directory | Resolves claim globs; names one directory, not a glob. |
 | `symbol` | Symbol or nonempty array | family default | Selects claim hosts. |
+| `evidenceFiles` | `string[]` | none | Selects separate Markdown evidence documents with globs relative to the config directory. |
 | `evidenceExcludeCarriers` | `string[]` | all selected files | Narrows exclusions to matching selected files. |
 
 ### 4.2. Reference
@@ -349,6 +350,8 @@ Commands resolve configuration within the effective `--cwd` directory, preferrin
 
 ## 5. Tags and targets
 
+### 5.1. Annotations
+
 ```text
 @evidence <target> <reason>
 @evidenceExclude <target> <reason>
@@ -378,6 +381,59 @@ For longer explanations, use an H2, H3, or H4 heading with the tag and target, f
 ```
 
 In Markdown, write the same headings and body without the comment wrapper. Every tagged heading starts a new annotation, including nested headings. Its explanation ends at the next tag or an ordinary same-level or higher heading; untagged deeper headings remain part of the explanation. Targets must appear on the tagged heading and explanations must be nonempty. Code examples create no annotations. Exclusions, reviews, and `@link` accept the same heading form.
+
+### 5.2. Evidence in separate files
+
+Set `evidenceFiles` on a claim to keep evidence statements in separate Markdown documents. Its globs resolve from the physical `evidence.config.ts` directory, independently of the claim's `root`. Each document needs an H1 with the file-qualified address of a selected claim unit, also relative to the config directory. Put H2, H3, or H4 `@evidence` headings beneath that H1; the following text is the reason.
+
+```ts
+// evidence.config.ts
+export default {
+  claims: [{
+    type: "typescript",
+    files: ["src/**/*.ts"],
+    evidenceFiles: ["evidence/**/*.md"],
+    reference: { type: "markdown", files: ["docs/requirements.md"] },
+  }],
+};
+```
+
+```md
+<!-- evidence/orders.md -->
+# src/orders.ts#placeOrder
+
+## @evidence docs/requirements.md#checkout
+
+The order is checked before payment is requested.
+```
+
+For a Markdown claim, the same structure names the selected heading instead of a code declaration:
+
+```ts
+// evidence.config.ts
+export default {
+  claims: [{
+    type: "markdown",
+    files: ["docs/guide.md"],
+    symbol: "h2",
+    evidenceFiles: ["evidence/guide.md"],
+    reference: { type: "markdown", files: ["docs/requirements.md"], symbol: "h2" },
+  }],
+};
+```
+
+```md
+<!-- evidence/guide.md -->
+# docs/guide.md#pricing
+
+## @evidence docs/requirements.md#pricing
+
+The guide explains how the price is calculated.
+```
+
+The H1 identifies the original code or Markdown unit, so its statements count for that unit. One document can contain H1 sections for several units or claims. Annotation targets keep their usual path bases: programming targets resolve from the evidence document, while Markdown targets resolve from the reference root. Native documentation and separate evidence can cover the same claim together; duplicate and review policies apply to their combined statements. When `requireReview` is enabled, place `@evidenceReview` in an HTML comment directly below the detached evidence heading. Keep `@evidenceExclude` and `@evidenceExcludeReview` on eligible original claim carriers. No matching document, an unresolved H1, a statement outside an H1, a detached exclusion, or selecting one file as both a claim source and separate evidence makes the check incomplete.
+
+### 5.3. Target addresses
 
 | Target | Form |
 | --- | --- |

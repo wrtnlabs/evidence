@@ -1,7 +1,9 @@
 import type { IEvidenceConfigPlanClaim } from "../structures/IEvidenceConfigPlanClaim";
+import type { IEvidenceDetachedHostBinding } from "../structures/IEvidenceDetachedHostBinding";
 import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
 
 import type { IEvidenceMaterializedReference } from "./IEvidenceMaterializedReference";
+import type { IEvidenceDetachedOwner } from "./IEvidenceDetachedOwner";
 
 /**
  * One enabled claim with the inventories needed to resolve its
@@ -45,6 +47,12 @@ export interface IEvidenceMaterializedClaim {
    * inventory's contextual population.
    */
   unitIds: string[];
+
+  /** Detached Markdown carrier relations after owner resolution. */
+  detachedHostBindings?: IEvidenceDetachedHostBinding[];
+
+  /** H1 resolutions awaiting cross-claim orphan detection. */
+  detachedOwners?: IEvidenceDetachedOwner[];
 
   /**
    * Hosts that may carry exclusions when exclusion scope differs from selected

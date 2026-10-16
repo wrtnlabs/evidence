@@ -45,6 +45,12 @@ export function validateEvidenceConfig(
     validateArtifactType(problems, `${claimPath}.type`, claim.type);
     validateRoot(problems, `${claimPath}.root`, configFile, claim.root);
     validateGlobs(problems, `${claimPath}.files`, claim.files);
+    if (claim.evidenceFiles !== undefined)
+      validateGlobs(
+        problems,
+        `${claimPath}.evidenceFiles`,
+        claim.evidenceFiles,
+      );
     validateSymbols(problems, `${claimPath}.symbol`, claim.symbol, claim.type);
     if (claim.evidenceExcludeCarriers !== undefined)
       validateGlobs(

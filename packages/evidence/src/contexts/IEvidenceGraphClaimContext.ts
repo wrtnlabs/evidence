@@ -45,6 +45,9 @@ export interface IEvidenceGraphClaimContext {
    */
   readonly population: IEvidencePopulation;
 
+  /** Original semantic owners of physical Markdown evidence carriers. */
+  readonly detachedHostUnits: ReadonlyMap<string, string>;
+
   /**
    * Zero-based position of this claim in the captured graph input.
    *

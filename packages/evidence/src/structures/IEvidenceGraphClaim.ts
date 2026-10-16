@@ -1,4 +1,5 @@
 import type { EvidenceSeverity } from "../typings/EvidenceSeverity";
+import type { IEvidenceDetachedHostBinding } from "./IEvidenceDetachedHostBinding";
 import type { IEvidenceGraphReference } from "./IEvidenceGraphReference";
 import type { IEvidenceInventory } from "./IEvidenceInventory";
 
@@ -63,6 +64,9 @@ export interface IEvidenceGraphClaim {
    * acknowledgements to fail cardinality and checklist policies.
    */
   unitIds: string[];
+
+  /** Markdown carriers whose statements belong to selected original units. */
+  detachedHostBindings?: IEvidenceDetachedHostBinding[];
 
   /**
    * Carrier IDs permitted to write exclusions for this claim.

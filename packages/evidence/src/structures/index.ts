@@ -2,6 +2,7 @@ export type * from "./IEvidenceAdapter";
 export type * from "./IEvidenceAddress";
 export type * from "./IEvidenceCommentSyntax";
 export type * from "./IEvidenceDeclaration";
+export type * from "./IEvidenceDetachedHostBinding";
 export type * from "./IEvidenceDiagnostic";
 export type * from "./IEvidenceDiagnosticContext";
 export type * from "./IEvidenceReportPage";

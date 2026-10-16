@@ -248,10 +248,13 @@ class EvidenceGraphEvaluator {
     const inventory = new EvidenceInventory([claim.inventory]);
     const snapshot = inventory.snapshot();
     const population = inventory.select(claim.unitIds);
+    const detachedHostUnits: ReadonlyMap<string, string> =
+      this.detachedHostUnits(claim, snapshot, population);
     const context: IEvidenceGraphClaimContext = {
       claim,
       inventory: snapshot,
       population,
+      detachedHostUnits,
       index: claimIndex,
     };
     this.diagnostics.push(
@@ -284,6 +287,56 @@ class EvidenceGraphEvaluator {
       complete: snapshot.complete,
       obligations,
     };
+  }
+
+  /**
+   * Validates physical Markdown bindings before allowing them to own evidence.
+   *
+   * A binding must name an attached Markdown carrier and a visible selected
+   * original unit. Conflicting or fabricated relations make the claim
+   * incomplete, preventing direct graph callers from projecting evidence onto
+   * an arbitrary declaration.
+   */
+  private detachedHostUnits(
+    claim: IEvidenceGraphClaim,
+    inventory: IEvidenceInventory,
+    population: IEvidencePopulation,
+  ): ReadonlyMap<string, string> {
+    const bindings: Map<string, string> = new Map<string, string>();
+    const hosts = new Map(inventory.hosts.map((host) => [host.id, host]));
+    const units = new Map(inventory.units.map((unit) => [unit.id, unit]));
+    const selected: Set<string> = new Set<string>(
+      population.units.map((unit) => unit.id),
+    );
+    for (const binding of claim.detachedHostBindings ?? []) {
+      const host = hosts.get(binding.hostId);
+      const previous = bindings.get(binding.hostId);
+      if (
+        host?.attachment === "attached" &&
+        host.unitIds.length === 1 &&
+        host.unitIds.every((id) => units.get(id)?.type === "markdown") &&
+        selected.has(binding.unitId) &&
+        (previous === undefined || previous === binding.unitId)
+      ) {
+        bindings.set(binding.hostId, binding.unitId);
+        continue;
+      }
+      inventory.complete = false;
+      inventory.diagnostics.push({
+        code: "graph-detached-host-binding",
+        severity: "error",
+        message:
+          "Detached evidence binding has no attached Markdown carrier and unique selected claim unit.",
+        repair:
+          "Rebuild detached host bindings from resolved H1 claim addresses.",
+        ...(host === undefined
+          ? {}
+          : { location: { file: host.file, range: host.range } }),
+        hostId: binding.hostId,
+        unitId: binding.unitId,
+      });
+    }
+    return bindings;
   }
 
   /**
@@ -470,6 +523,8 @@ class EvidenceGraphEvaluator {
     const selectedHosts = new Map(
       claimPopulation.hosts.map((host) => [host.id, host.unitIds]),
     );
+    for (const [hostId, unitId] of context.claim.detachedHostUnits)
+      selectedHosts.set(hostId, [unitId]);
     const attachedHosts = new Set(
       claimInventory.hosts
         .filter((host) => host.attachment === "attached")
@@ -974,9 +1029,16 @@ class EvidenceGraphEvaluator {
       )
         continue;
       const host = hosts.get(declaration.hostId);
+      const detachedUnitId: string | undefined =
+        context.claim.detachedHostUnits.get(declaration.hostId);
       acknowledgements.push({
         declaration,
-        hostUnitIds: host?.attachment === "attached" ? host.unitIds : [],
+        hostUnitIds:
+          detachedUnitId !== undefined
+            ? [detachedUnitId]
+            : host?.attachment === "attached"
+              ? host.unitIds
+              : [],
         targetUnitId: target.id,
       });
     }
@@ -1018,7 +1080,14 @@ class EvidenceGraphEvaluator {
         continue;
       }
       const host = hosts.get(review.hostId);
-      const hostUnitIds = host?.attachment === "attached" ? host.unitIds : [];
+      const detachedUnitId: string | undefined =
+        context.claim.detachedHostUnits.get(review.hostId);
+      const hostUnitIds =
+        detachedUnitId !== undefined
+          ? [detachedUnitId]
+          : host?.attachment === "attached"
+            ? host.unitIds
+            : [];
       const key = JSON.stringify([review.hostId, review.reviews, target.id]);
       if (duplicateKeys.has(key)) {
         this.diagnostics.push(

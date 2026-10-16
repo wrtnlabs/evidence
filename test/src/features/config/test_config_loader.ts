@@ -21,23 +21,23 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  * are filtered.
  *
  * 1. Use a path containing spaces and literal punctuation; load equivalent ts,
- *    cts, and mts configurations that import helper globs while an unrelated
- *    TypeScript file contains a type error.
+ *    cts, and mts configurations that import helper globs and preserve
+ *    evidenceFiles while an unrelated TypeScript file contains a type error.
  * 2. Remove the consumer tsconfig and require the isolated evaluator to load the
  *    same TypeScript configuration and its imported helper.
  * 3. Emit stdout and stderr from configuration evaluation and require both tokens
  *    to reach the supplied diagnostic sink.
  * 4. Configure an unsupported artifact and require its exact claims[0].type path
  *    and adapter-certification cause in the loading error.
- * 5. Plan a disabled claim with missing source and reference paths; require the
- *    correct configuration anchor and no active claims without touching those
- *    inputs.
+ * 5. Plan a disabled claim with missing source, detached evidence and reference
+ *    paths; require the correct configuration anchor and no active claims
+ *    without touching those inputs.
  * 6. Require runtime exceptions and type errors in an imported helper to reject
  *    loading rather than return partial configuration data.
  *
- * @evidence contracts/testing.md#behavioral-verification Loads ts, cts and mts configurations with helpers in a punctuated path and asserts values, isolation, diagnostics routing and failures.
+ * @evidence contracts/testing.md#behavioral-verification Loads ts, cts and mts configurations with helpers and evidenceFiles in a punctuated path and asserts values, isolation, diagnostics routing and failures.
  * @evidence contracts/testing.md#independent-expectations Expected values are the authored helper outputs; failure expectations follow the loader contract.
- * @evidence contracts/testing.md#distinguishing-cases Covers module formats, a removed tsconfig, an unrelated type error, stdout and stderr routing, an unsupported artifact, a disabled claim with missing paths, and runtime and type errors in helpers.
+ * @evidence contracts/testing.md#distinguishing-cases Covers module formats, a removed tsconfig, an unrelated type error, stdout and stderr routing, an unsupported artifact, a disabled claim with missing native and detached paths, and runtime and type errors in helpers.
  * @evidence contracts/testing.md#execution-ownership The exported test_config_loader is discovered by DynamicExecutor and calls maintained source in-process; the only child process is the product's own read-only configuration evaluator started by the code under test. It installs nothing and spawns no CLI.
  */
 export async function test_config_loader(): Promise<void> {
@@ -52,6 +52,7 @@ export async function test_config_loader(): Promise<void> {
         {
           type: "typescript",
           files,
+          evidenceFiles: ["evidence/**/*.md"],
           reference: { type: "markdown", files: ["docs/**"] },
         },
       ],
@@ -86,6 +87,11 @@ export async function test_config_loader(): Promise<void> {
           `${extension} imported globs`,
           output.claims[0]?.files,
           ["src/**"],
+        );
+        TestValidator.equals(
+          `${extension} detached evidence globs`,
+          output.claims[0]?.evidenceFiles,
+          ["evidence/**/*.md"],
         );
       }
 
@@ -164,6 +170,7 @@ export async function test_config_loader(): Promise<void> {
                 disabled: true,
                 root: "missing-source",
                 files: ["**/*.ts"],
+                evidenceFiles: ["missing-evidence/**/*.md"],
                 reference: {
                   type: "swagger",
                   file: "missing-openapi.json",

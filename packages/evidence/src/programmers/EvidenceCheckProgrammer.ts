@@ -1,5 +1,7 @@
 import { EvidenceGraph } from "../graph/EvidenceGraph";
 import { EvidenceSourceLoader } from "../loaders/EvidenceSourceLoader";
+import { EvidenceInventory } from "../graph/EvidenceInventory";
+import { EvidenceDetachedEvidence } from "../internal/EvidenceDetachedEvidence";
 import { EvidenceSwaggerAdapter } from "../adapters/swagger/EvidenceSwaggerAdapter";
 import { EvidenceTargetResolver } from "../targets/EvidenceTargetResolver";
 import { EvidenceAdapterFactory } from "../internal/EvidenceAdapterFactory";
@@ -62,13 +64,15 @@ export namespace EvidenceCheckProgrammer {
    * The returned array retains the configuration-plan order because evaluation
    * and reporting use positions as stable claim coordinates. Loading is allowed
    * to run concurrently, but each materialized reference remains attached to
-   * exactly the claim entry that declared it.
+   * exactly the claim entry that declared it. Separate Markdown evidence is
+   * bound to original claim units, and an H1 is orphaned only if no
+   * participating claim selects it.
    *
-   * @evidence contracts/common.md#principled-implementation Each active claim and its references are loaded concurrently through the owning adapter and keep the plan's order and attachment.
+   * @evidence contracts/common.md#principled-implementation Each active claim and its references are loaded concurrently through the owning adapter; detached Markdown is bound to selected claim units and shared H1 owners are checked after every claim loads.
    * @evidence contracts/common.md#clear-and-simple-design Per-claim loading and unit selection are private helpers.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Selection uses only configured symbol kinds, so structural ancestors never become extra obligations.
-   * @evidence contracts/common.md#meaningful-documentation The comment explains ordering and concurrent loading.
-   * @evidence contracts/performance.md#efficient-algorithms Linear in configured populations; loads run concurrently.
+   * @evidence contracts/common.md#meaningful-documentation The comment explains ordering, concurrent loading and shared detached owner validation.
+   * @evidence contracts/performance.md#efficient-algorithms Loads run concurrently; cross-claim orphan detection scans the resolved H1 records once per claim.
    * @evidence contracts/performance.md#reuse-equivalent-work Populations with the same type, root and file selection share one load within a materialization, and each consumer receives its own clone, so identical selections are scanned and parsed once.
    * @evidence contracts/performance.md#bound-retention-and-release-resources Inventories are owned by the returned claims; adapters and collectors release their resources before returning. The shared-load map is local to one call and released when it returns.
    */
@@ -84,9 +88,46 @@ export namespace EvidenceCheckProgrammer {
     ): Promise<IEvidenceInventory> {
       return shared(loads, plan.configFile, population);
     }
-    return Promise.all(
-      plan.claims.map((claim) => materializeClaim(loader, claim)),
+    const claims: IEvidenceMaterializedClaim[] = await Promise.all(
+      plan.claims.map((claim) =>
+        materializeClaim(loader, plan.configFile, claim),
+      ),
     );
+    const selectedOwners: Set<string> = new Set<string>(
+      claims.flatMap((claim: IEvidenceMaterializedClaim): string[] =>
+        (claim.detachedOwners ?? []).flatMap((owner): string[] =>
+          owner.unitId === undefined ? [] : [owner.key],
+        ),
+      ),
+    );
+    const reportedOwners: Set<string> = new Set<string>();
+    const completeClaims: Set<IEvidenceMaterializedClaim> = new Set(
+      claims.filter(
+        (claim: IEvidenceMaterializedClaim): boolean =>
+          claim.inventory.complete,
+      ),
+    );
+    for (const claim of claims)
+      for (const owner of claim.detachedOwners ?? []) {
+        if (
+          owner.unitId !== undefined ||
+          selectedOwners.has(owner.key) ||
+          reportedOwners.has(owner.key) ||
+          !completeClaims.has(claim)
+        )
+          continue;
+        claim.inventory.diagnostics.push({
+          code: "evidence-files-owner",
+          severity: "error",
+          message: `H1 owner '${owner.target}' does not name one selected claim unit (${owner.status}).`,
+          repair:
+            "Use a file-qualified address of a unit selected by a claim using this evidence file.",
+          location: owner.location,
+        });
+        claim.inventory.complete = false;
+        reportedOwners.add(owner.key);
+      }
+    return claims;
   }
 
   /**
@@ -181,9 +222,10 @@ export namespace EvidenceCheckProgrammer {
     loader: (
       population: IEvidenceClaim | IEvidenceReference,
     ) => Promise<IEvidenceInventory>,
+    configFile: string,
     plan: IEvidenceConfigPlanClaim,
   ): Promise<IEvidenceMaterializedClaim> {
-    const [inventory, references] = await Promise.all([
+    const [inventory, references, detached] = await Promise.all([
       loader(plan.population),
       Promise.all(
         plan.references.map(async (reference) => {
@@ -195,11 +237,34 @@ export namespace EvidenceCheckProgrammer {
           } satisfies IEvidenceMaterializedReference;
         }),
       ),
+      plan.population.evidenceFiles === undefined
+        ? Promise.resolve(undefined)
+        : loader({ type: "markdown", files: plan.population.evidenceFiles }),
     ]);
+    const unitIds: string[] = selectUnitIds(inventory, plan.symbols);
+    const separate =
+      detached === undefined
+        ? undefined
+        : await EvidenceDetachedEvidence.bind(
+            configFile,
+            plan.population,
+            inventory,
+            unitIds,
+            detached,
+          );
     return {
       plan,
-      inventory,
-      unitIds: selectUnitIds(inventory, plan.symbols),
+      inventory:
+        separate === undefined
+          ? inventory
+          : new EvidenceInventory([inventory, separate.inventory]).snapshot(),
+      unitIds,
+      ...(separate === undefined
+        ? {}
+        : {
+            detachedHostBindings: separate.bindings,
+            detachedOwners: separate.owners,
+          }),
       ...(plan.population.evidenceExcludeCarriers === undefined
         ? {}
         : {
@@ -379,6 +444,9 @@ export namespace EvidenceCheckProgrammer {
       severity: materialized.plan.severity,
       inventory,
       unitIds: materialized.unitIds,
+      ...(materialized.detachedHostBindings === undefined
+        ? {}
+        : { detachedHostBindings: materialized.detachedHostBindings }),
       ...(materialized.exclusionHostIds === undefined
         ? {}
         : { exclusionHostIds: materialized.exclusionHostIds }),
