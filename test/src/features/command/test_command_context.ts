@@ -19,11 +19,11 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  * 3. Enable checklist mode and require both missing sections on its one host.
  * 4. Mutate a source after analysis and require context from the captured snapshot.
  * 5. Bound a long section with explicit omitted lines and characters.
- * 6. Reject context on a non-check command before loading configuration.
+ * 6. Leave non-Markdown errors unchanged and reject context on other commands.
  *
  * @evidence contracts/testing.md#behavioral-verification Runs buffered check commands against real TypeScript and Markdown sources and asserts rendered missing-reference bodies and unchanged default output.
  * @evidence contracts/testing.md#independent-expectations Fixture section text and configured targets provide literal expectations independent of the renderer and extraction implementation.
- * @evidence contracts/testing.md#distinguishing-cases Covers ordinary and checklist gaps, selected versus unrelated Markdown headings, text and JSON, absence without the flag, and invalid command use.
+ * @evidence contracts/testing.md#distinguishing-cases Covers ordinary and checklist gaps, selected versus unrelated Markdown headings, a non-Markdown reference, text and JSON, absence without the flag, and invalid command use.
  * @evidence contracts/testing.md#execution-ownership The exported test_command_context is discovered by DynamicExecutor and calls maintained source in-process without spawning a CLI or installing a consumer.
  */
 export async function test_command_context(): Promise<void> {
@@ -229,6 +229,39 @@ export async function test_command_context(): Promise<void> {
           section.omittedCharacters > 0 &&
           section.omittedLines > 0,
       );
+    },
+  );
+  await EvidenceTestFileSystem.experiment(
+    "non markdown context",
+    {
+      "evidence.config.json": JSON.stringify({
+        claims: [
+          {
+            type: "typescript",
+            files: ["src/*.ts"],
+            symbol: "function",
+            reference: {
+              type: "typescript",
+              files: ["ref/*.ts"],
+              symbol: "function",
+            },
+          },
+        ],
+      }),
+      "src/main.ts": "export function treatment(): void {}\n",
+      "ref/rules.ts": "export function requiredRule(): void {}\n",
+    },
+    async (directory: string): Promise<void> => {
+      const plain = await EvidenceCommand.run(["--format", "json"], directory);
+      const enriched = await EvidenceCommand.run(
+        ["--context", "--format", "json"],
+        directory,
+      );
+      const report: IEvidenceCheckReport =
+        typia.json.assertParse<IEvidenceCheckReport>(enriched.stdout);
+      TestValidator.equals("non-Markdown error", report.exitCode, 1);
+      TestValidator.equals("non-Markdown output unchanged", enriched.stdout, plain.stdout);
+      TestValidator.equals("non-Markdown has no context", report.diagnostics[0]?.context, undefined);
     },
   );
 }
