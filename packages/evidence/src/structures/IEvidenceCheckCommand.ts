@@ -66,6 +66,13 @@ export interface IEvidenceCheckCommand {
   watch?: true;
 
   /**
+   * Includes captured Markdown sections for displayed missing obligations.
+   *
+   * Omission keeps the ordinary diagnostic output. Watch does not support it.
+   */
+  context?: true;
+
+  /**
    * Maximum number of diagnostics to print.
    *
    * Omission prints all of them; counts always cover the whole analysis.

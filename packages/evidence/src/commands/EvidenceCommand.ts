@@ -103,6 +103,7 @@ export namespace EvidenceCommand {
     const values: Map<string, string> = new Map();
     let only: string[] | undefined;
     let shallow: boolean = false;
+    let context: boolean = false;
     let target: string | undefined;
     let watch = false;
     for (let index = 0; index < tokens.length; index++) {
@@ -131,6 +132,18 @@ export namespace EvidenceCommand {
             "The shallow flag was provided twice.",
           );
         shallow = true;
+        continue;
+      }
+      if (token === "--context") {
+        if (operation !== "check")
+          throw new EvidenceCommandError(
+            "--context is available only to evidence check.",
+          );
+        if (context)
+          throw new EvidenceCommandError(
+            "The context flag was provided twice.",
+          );
+        context = true;
         continue;
       }
       if (token === "--only") {
@@ -187,6 +200,8 @@ export namespace EvidenceCommand {
 
     if (shallow && only === undefined)
       throw new EvidenceCommandError("--shallow requires --only targets.");
+    if (watch && context)
+      throw new EvidenceCommandError("--context cannot be used with --watch.");
     const cwd = values.get("cwd") ?? ".";
     if (operation === "init")
       return {
@@ -268,6 +283,7 @@ export namespace EvidenceCommand {
       ...(unit === undefined ? {} : { unit }),
       ...(only === undefined ? {} : { only }),
       ...(shallow ? { shallow: true } : {}),
+      ...(context ? { context: true } : {}),
     };
   }
 
@@ -535,14 +551,32 @@ async function runAnalysis(
               cwd,
               command.only,
               command.shallow === true,
+              command.context === true,
             );
+      const window = {
+        ...(command.limit === undefined ? {} : { limit: command.limit }),
+        ...(command.unit === undefined ? {} : { unit: command.unit }),
+      };
+      const output: string =
+        command.context === true
+          ? command.format === "json"
+            ? EvidenceReporter.json(
+                EvidenceQuery.context(
+                  analysis,
+                  EvidenceReporter.narrow(report, window),
+                ),
+              )
+            : EvidenceReporter.text(
+                EvidenceQuery.context(
+                  analysis,
+                  EvidenceReporter.narrow(report, window),
+                ),
+              )
+          : EvidenceReporter.render(report, command.format, window);
       return writeReport(
         command.output,
         cwd,
-        EvidenceReporter.render(report, command.format, {
-          ...(command.limit === undefined ? {} : { limit: command.limit }),
-          ...(command.unit === undefined ? {} : { unit: command.unit }),
-        }),
+        output,
         report.exitCode,
         false,
       );
@@ -913,6 +947,7 @@ const HELP = dedent`
         --kind <symbol>   Filter the Evidence Graph list by symbol kind.
         --limit <n>       Print at most n check diagnostics; counts stay complete.
         --unit <n>        Print diagnostics for at most n units.
+        --context         Show missing Markdown reference sections.
         --only <targets...> Check only these units and their descendants.
         --shallow         With --only, omit descendants of the named units.
     -w, --watch           Recheck whenever an active dependency changes.

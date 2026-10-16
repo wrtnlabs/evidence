@@ -158,6 +158,18 @@ function diagnosticLines(
     `Subject: ${subject(diagnostic)}`,
     diagnostic.message,
     `Repair: ${diagnostic.repair}`,
+    ...(diagnostic.context ?? []).flatMap((section) => [
+      `Reference context: ${section.target} (${section.file}:${section.startLine}-${section.endLine})`,
+      section.text,
+      ...(section.truncated
+        ? [
+            `Context truncated: ${section.omittedCharacters} characters and ${section.omittedLines} lines omitted.`,
+          ]
+        : []),
+    ]),
+    ...(diagnostic.omittedContext === undefined
+      ? []
+      : [`${diagnostic.omittedContext} reference sections omitted.`]),
   ];
 }
 

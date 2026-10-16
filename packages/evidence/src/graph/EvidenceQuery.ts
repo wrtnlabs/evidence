@@ -2,6 +2,7 @@ import path from "node:path";
 import type { IEvidenceQueryContext } from "../contexts/IEvidenceQueryContext";
 import { EvidenceQueryProgrammer } from "../programmers/EvidenceQueryProgrammer";
 import { EvidenceUnitCheckProgrammer } from "../programmers/EvidenceUnitCheckProgrammer";
+import { enrichCheckContext } from "../programmers/enrichCheckContext";
 import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
 import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import type { IEvidenceGraphReport } from "../structures/IEvidenceGraphReport";
@@ -57,6 +58,27 @@ export class EvidenceQuery {
       cwd: path.resolve(cwd),
       populations: EvidenceQueryProgrammer.populations(snapshot),
     };
+  }
+
+  /**
+   * Adds captured Markdown source to displayed missing-reference diagnostics.
+   *
+   * The supplied report may already be focused and windowed. This reads only
+   * the analysis snapshot and returns an independently owned report.
+   *
+   * @evidence contracts/common.md#principled-implementation Structured missing identities select semantic source spans from the same captured analysis.
+   * @evidence contracts/common.md#clear-and-simple-design Enrichment is delegated to its programmer without rechecking coverage.
+   * @evidence contracts/common.md#prohibited-implementation-shortcuts No source is reopened and no diagnostic prose is parsed.
+   * @evidence contracts/common.md#meaningful-documentation The comment explains snapshot ownership and report window support.
+   * @evidence contracts/performance.md#efficient-algorithms Cost is one enrichment pass and one clone of the returned report.
+   * @evidenceExclude contracts/performance.md#reuse-equivalent-work The caller supplies already captured inputs for a single enrichment.
+   * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources The returned report belongs to the caller; no handle is retained.
+   */
+  public static context(
+    analysis: IEvidenceCheckAnalysis,
+    report: IEvidenceCheckReport,
+  ): IEvidenceCheckReport {
+    return structuredClone(enrichCheckContext(analysis, report));
   }
 
   /**
@@ -171,10 +193,11 @@ export class EvidenceQuery {
   public async check(
     targets: readonly string[],
     shallow: boolean = false,
+    context: boolean = false,
   ): Promise<IEvidenceCheckReport> {
     const selected: string[] = [...targets];
     return structuredClone(
-      await EvidenceUnitCheckProgrammer.check(this.context, selected, shallow),
+      await EvidenceUnitCheckProgrammer.check(this.context, selected, shallow, context),
     );
   }
 
@@ -197,8 +220,9 @@ export class EvidenceQuery {
     cwd: string,
     targets: readonly string[],
     shallow: boolean = false,
+    context: boolean = false,
   ): Promise<IEvidenceCheckReport> {
-    return new EvidenceQuery(analysis, cwd).check(targets, shallow);
+    return new EvidenceQuery(analysis, cwd).check(targets, shallow, context);
   }
 
   /**

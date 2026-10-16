@@ -507,6 +507,7 @@ Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` 
 | `-o, --output <path>` | Write the result to a file and keep stdout empty. |
 | `--language`, `--kind` | Filter `list` rows after the full check. |
 | `--limit <n>`, `--unit <n>` | Print at most `n` `check` diagnostics, or only those of the first `n` units (for example Markdown headings), each with all its diagnostics. Counts, status, and exit code still cover the whole analysis, and the report states how many diagnostics were omitted. |
+| `--context` | Show captured Markdown sections required by displayed missing acknowledgement or checklist errors. Each error includes at most eight sections, with at most 40 lines and 8,192 UTF-16 characters per section; truncation is reported. Available for finite `check` only. |
 | `--only <target...>` | Restrict `check` outcomes to these configured units and their descendants. Counts, diagnostics, and exit code describe the selected scope. |
 | `--shallow` | With `--only`, check the named units themselves and omit their descendants. |
 | `-w, --watch` | Recheck `check` when a dependency changes; NDJSON with `--format json`. |
@@ -518,6 +519,7 @@ Use `--only` with one or more targets printed by `evidence list`, using the same
 ```bash
 npx @wrtnlabs/evidence --only requirements.md#pricing requirements.md#refund
 npx @wrtnlabs/evidence check --only requirements.md#pricing --shallow
+npx @wrtnlabs/evidence check --only requirements.md#pricing --context
 npx @wrtnlabs/evidence check --only src/calculator.ts#calculate --watch
 ```
 

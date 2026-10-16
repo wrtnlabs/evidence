@@ -57,6 +57,7 @@ export namespace EvidenceUnitCheckProgrammer {
     context: IEvidenceQueryContext,
     targets: readonly string[],
     shallow: boolean,
+    includeMissingIds: boolean = false,
   ): Promise<IEvidenceCheckReport> {
     if (targets.length === 0)
       throw new Error("Focused checks require at least one target.");
@@ -155,7 +156,7 @@ export namespace EvidenceUnitCheckProgrammer {
           [
             ...analysis.report.diagnostics.flatMap(
               (diagnostic: IEvidenceDiagnostic): IEvidenceDiagnostic[] =>
-                selectDiagnostic(analysis, selections, diagnostic),
+                selectDiagnostic(analysis, selections, diagnostic, includeMissingIds),
             ),
             ...failures,
           ],
@@ -353,6 +354,7 @@ function selectDiagnostic(
   analysis: IEvidenceCheckAnalysis,
   selections: Map<string, IEvidenceUnitCheckSelection>,
   diagnostic: IEvidenceDiagnostic,
+  includeMissingIds: boolean,
 ): IEvidenceDiagnostic[] {
   if (diagnostic.claim === undefined) return [diagnostic];
   const own: IEvidenceUnitCheckSelection | undefined = selections.get(
@@ -412,6 +414,7 @@ function selectDiagnostic(
     return [
       {
         ...diagnostic,
+        ...(includeMissingIds ? { missingUnitIds: missing } : {}),
         message: `Claim ${diagnostic.claim + 1} reference ${(diagnostic.reference ?? 0) + 1}: Host '${host?.name ?? diagnostic.unitId ?? "unknown"}' has not acknowledged ${missing.length} selected checklist item(s): ${names.join(", ")}.`,
       },
     ];
