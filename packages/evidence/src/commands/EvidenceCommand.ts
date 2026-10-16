@@ -66,8 +66,9 @@ export namespace EvidenceCommand {
    * when the first token is absent or an option; `inspect` accepts one
    * positional target and check's `--only` consumes targets until the next
    * option. Pages are one-based and require a finite check with an effective
-   * diagnostic limit. Callers receive an {@link EvidenceCommandError} for repairable
-   * syntax mistakes rather than a configuration or source diagnostic.
+   * diagnostic limit. Callers receive an {@link EvidenceCommandError} for
+   * repairable syntax mistakes rather than a configuration or source
+   * diagnostic.
    *
    * @example
    *   EvidenceCommand.parse(["graph", "--format", "dot"]);
@@ -586,13 +587,7 @@ async function runAnalysis(
         command.format === "json"
           ? EvidenceReporter.json(presented)
           : EvidenceReporter.text(presented);
-      return writeReport(
-        command.output,
-        cwd,
-        output,
-        report.exitCode,
-        false,
-      );
+      return writeReport(command.output, cwd, output, report.exitCode, false);
     }
     // Query projections reuse the captured inventory and diagnostics. Reanalyzing
     // here could make a report disagree with the command's check boundary.

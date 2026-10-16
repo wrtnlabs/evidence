@@ -1,19 +1,17 @@
-import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
+import type { IEvidenceCheckContextIndex } from "../internal/IEvidenceCheckContextIndex";
 import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
 import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
 import type { IEvidenceDiagnosticContext } from "../structures/IEvidenceDiagnosticContext";
 import type { IEvidenceGraphClaim } from "../structures/IEvidenceGraphClaim";
-import type { IEvidenceGraphClaimResult } from "../structures/IEvidenceGraphClaimResult";
 import type { IEvidenceGraphHostCoverage } from "../structures/IEvidenceGraphHostCoverage";
 import type { IEvidenceGraphObligation } from "../structures/IEvidenceGraphObligation";
 import type { IEvidenceGraphReference } from "../structures/IEvidenceGraphReference";
-import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
-import type { IEvidencePublicAddress } from "../structures/IEvidencePublicAddress";
 import type { IEvidenceSourceFile } from "../structures/IEvidenceSourceFile";
 import type { IEvidenceSourceRange } from "../structures/IEvidenceSourceRange";
 import type { IEvidenceUnit } from "../structures/IEvidenceUnit";
 import type { IEvidenceUnitSite } from "../structures/IEvidenceUnitSite";
+import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
 
 const MAX_SECTIONS: number = 8;
 const MAX_LINES: number = 40;
@@ -29,14 +27,39 @@ const MAX_CHARACTERS: number = 8192;
  * @evidence contracts/common.md#clear-and-simple-design This presentation step enriches an existing report without reevaluating graph coverage.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Diagnostic prose is never parsed and unavailable source is never invented.
  * @evidence contracts/common.md#meaningful-documentation The comment explains focus, boundaries and snapshot ownership.
- * @evidence contracts/performance.md#efficient-algorithms Work scales with displayed missing diagnostics and at most eight sections per finding; source lookup scans only its reference inventory.
- * @evidenceExclude contracts/performance.md#reuse-equivalent-work The captured analysis is reused, and enrichment runs once per finite command output.
- * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources Returned strings belong to the report and no handle or task is retained.
+ * @evidence contracts/performance.md#efficient-algorithms Authored boundaries are indexed once; each displayed boundary builds unit, source, address and host maps once, then each displayed diagnostic resolves at most eight sections by identity.
+ * @evidence contracts/performance.md#reuse-equivalent-work Equivalent diagnostics on one reference boundary reuse its captured inventory indexes for this rendering pass.
+ * @evidence contracts/performance.md#bound-retention-and-release-resources Boundary maps live for one enrichment call and release on return or failure; their entries are bounded by displayed boundaries and captured inventory records. Returned excerpts belong to the report, with at most eight bounded sections per displayed diagnostic; no handle or task is retained.
  */
 export function enrichCheckContext(
   analysis: IEvidenceCheckAnalysis,
   report: IEvidenceCheckReport,
 ): IEvidenceCheckReport {
+  const references: Map<string, IEvidenceGraphReference> = new Map();
+  analysis.graphInput.claims.forEach(
+    (claim: IEvidenceGraphClaim, claimPosition: number): void => {
+      claim.references.forEach(
+        (
+          reference: IEvidenceGraphReference,
+          referencePosition: number,
+        ): void => {
+          references.set(
+            boundary(
+              claim.index ?? claimPosition,
+              reference.index ?? referencePosition,
+            ),
+            reference,
+          );
+        },
+      );
+    },
+  );
+  const obligations: Map<string, IEvidenceGraphObligation> = new Map();
+  for (const claim of analysis.graph.claims)
+    for (const obligation of claim.obligations)
+      obligations.set(boundary(claim.claim, obligation.reference), obligation);
+  const indexes: Map<string, IEvidenceCheckContextIndex> = new Map();
+  const unavailable: Set<string> = new Set();
   const diagnostics: IEvidenceDiagnostic[] = report.diagnostics.map(
     (diagnostic: IEvidenceDiagnostic): IEvidenceDiagnostic => {
       if (
@@ -47,26 +70,29 @@ export function enrichCheckContext(
           diagnostic.code !== "graph-checklist-missing")
       )
         return diagnostic;
-      const claim: IEvidenceGraphClaim | undefined = analysis.graphInput.claims.find(
-        (candidate: IEvidenceGraphClaim, index: number): boolean =>
-          (candidate.index ?? index) === diagnostic.claim,
-      );
+      const key: string = boundary(diagnostic.claim, diagnostic.reference);
+      if (unavailable.has(key)) return diagnostic;
       const reference: IEvidenceGraphReference | undefined =
-        claim?.references.find(
-          (candidate: IEvidenceGraphReference, index: number): boolean =>
-            (candidate.index ?? index) === diagnostic.reference,
-        );
+        references.get(key);
       if (
         reference === undefined ||
         !reference.inventory.complete ||
         !reference.inventory.units.some(
           (unit: IEvidenceUnit): boolean => unit.type === "markdown",
         )
-      )
+      ) {
+        unavailable.add(key);
         return diagnostic;
+      }
+      let index: IEvidenceCheckContextIndex | undefined = indexes.get(key);
+      if (index === undefined) {
+        index = createIndex(reference, obligations.get(key));
+        indexes.set(key, index);
+      }
       const ids: string[] =
         diagnostic.code === "graph-checklist-missing"
-          ? (diagnostic.missingUnitIds ?? missingChecklistIds(analysis, diagnostic))
+          ? (diagnostic.missingUnitIds ??
+            missingChecklistIds(index, diagnostic))
           : diagnostic.unitId === undefined
             ? []
             : [diagnostic.unitId];
@@ -74,14 +100,10 @@ export function enrichCheckContext(
       const context: IEvidenceDiagnosticContext[] = unique
         .slice(0, MAX_SECTIONS)
         .flatMap((id: string): IEvidenceDiagnosticContext[] => {
-          const unit: IEvidenceUnit | undefined = reference.inventory.units.find(
-            (candidate: IEvidenceUnit): boolean => candidate.id === id,
-          );
+          const unit: IEvidenceUnit | undefined = index.units.get(id);
           if (unit?.type !== "markdown") return [];
-          const section: IEvidenceDiagnosticContext | undefined = captureSection(
-            reference.inventory,
-            unit,
-          );
+          const section: IEvidenceDiagnosticContext | undefined =
+            captureSection(index, unit);
           return section === undefined ? [] : [section];
         });
       const omittedContext: number = Math.max(0, unique.length - MAX_SECTIONS);
@@ -98,28 +120,56 @@ export function enrichCheckContext(
 }
 
 /**
+ * Builds bounded-lifetime lookup maps for one displayed reference boundary.
+ *
+ * The inventory and graph obligation were captured in the same analysis.
+ */
+function createIndex(
+  reference: IEvidenceGraphReference,
+  obligation: IEvidenceGraphObligation | undefined,
+): IEvidenceCheckContextIndex {
+  const targets: Map<string, string> = new Map();
+  for (const address of reference.inventory.addresses)
+    if (!targets.has(address.unitId))
+      targets.set(address.unitId, EvidenceFileTarget.format(address));
+  return {
+    units: new Map(
+      reference.inventory.units.map(
+        (unit: IEvidenceUnit): [string, IEvidenceUnit] => [unit.id, unit],
+      ),
+    ),
+    sources: new Map(
+      reference.inventory.sources.map(
+        (source: IEvidenceSourceFile): [string, IEvidenceSourceFile] => [
+          source.physicalPath,
+          source,
+        ],
+      ),
+    ),
+    targets,
+    hostCoverage: new Map(
+      (obligation?.hostCoverage ?? []).map(
+        (
+          ledger: IEvidenceGraphHostCoverage,
+        ): [string, IEvidenceGraphHostCoverage] => [ledger.hostUnitId, ledger],
+      ),
+    ),
+  };
+}
+
+/**
  * Resolves the original host ledger when no focused selection supplied IDs.
  *
  * Explained invalid answers are not unanswered items in the diagnostic text.
  */
 function missingChecklistIds(
-  analysis: IEvidenceCheckAnalysis,
+  index: IEvidenceCheckContextIndex,
   diagnostic: IEvidenceDiagnostic,
 ): string[] {
-  const claim: IEvidenceGraphClaimResult | undefined = analysis.graph.claims.find(
-    (candidate: IEvidenceGraphClaimResult): boolean =>
-      candidate.claim === diagnostic.claim,
-  );
-  const obligation: IEvidenceGraphObligation | undefined =
-    claim?.obligations.find(
-      (candidate: IEvidenceGraphObligation): boolean =>
-        candidate.reference === diagnostic.reference,
-    );
   const ledger: IEvidenceGraphHostCoverage | undefined =
-    obligation?.hostCoverage.find(
-      (candidate: IEvidenceGraphHostCoverage): boolean =>
-        candidate.hostUnitId === diagnostic.unitId,
-    );
+    diagnostic.unitId === undefined
+      ? undefined
+      : index.hostCoverage.get(diagnostic.unitId);
   return (
     ledger?.missingUnitIds.filter(
       (id: string): boolean => !ledger.explainedUnitIds.includes(id),
@@ -134,15 +184,12 @@ function missingChecklistIds(
  * Limiting at a line boundary keeps terminal output readable and exact.
  */
 function captureSection(
-  inventory: IEvidenceInventory,
+  index: IEvidenceCheckContextIndex,
   unit: IEvidenceUnit,
 ): IEvidenceDiagnosticContext | undefined {
   const site: IEvidenceUnitSite | undefined = unit.sites[0];
   if (site === undefined) return undefined;
-  const source: IEvidenceSourceFile | undefined = inventory.sources.find(
-    (candidate: IEvidenceSourceFile): boolean =>
-      candidate.physicalPath === site.file,
-  );
+  const source: IEvidenceSourceFile | undefined = index.sources.get(site.file);
   if (source === undefined) return undefined;
   const range: IEvidenceSourceRange = site.range;
   if (
@@ -171,11 +218,9 @@ function captureSection(
   }
   const text: string = raw.slice(0, end);
   const remainder: string = raw.slice(end);
-  const address: IEvidencePublicAddress | undefined = inventory.addresses.find(
-    (candidate: IEvidencePublicAddress): boolean => candidate.unitId === unit.id,
-  );
+  const target: string | undefined = index.targets.get(unit.id);
   return {
-    target: address === undefined ? unit.name : EvidenceFileTarget.format(address),
+    target: target ?? unit.name,
     file: site.file,
     startLine: range.start.line,
     endLine: Math.max(
@@ -190,4 +235,9 @@ function captureSection(
         ? 0
         : remainder.split("\n").length - (remainder.endsWith("\n") ? 1 : 0),
   };
+}
+
+/** Encodes authored claim and reference indices without delimiter collisions. */
+function boundary(claim: number, reference: number): string {
+  return JSON.stringify([claim, reference]);
 }

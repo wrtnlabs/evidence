@@ -73,9 +73,10 @@ export interface IEvidenceCheckCommand {
   context?: true;
 
   /**
-   * Maximum number of diagnostics to print.
+   * Maximum number of diagnostics per finite check page.
    *
-   * Omission prints all of them; counts always cover the whole analysis.
+   * Omission prints all of them unless a configured report limit applies;
+   * counts always cover the whole analysis.
    */
   limit?: number;
 

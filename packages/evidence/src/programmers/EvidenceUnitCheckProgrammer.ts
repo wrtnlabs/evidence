@@ -44,6 +44,7 @@ export namespace EvidenceUnitCheckProgrammer {
    * unresolved, ambiguous, and incomplete requests cannot silently pass.
    * Reference units select incoming coverage and claim units select outgoing
    * annotations and host policies. The supplied analysis remains unchanged.
+   * Context requests carry selected missing checklist IDs into diagnostics.
    *
    * @evidence contracts/common.md#principled-implementation Every target is inspected first; resolved targets select population subtrees (or single units when shallow), and claim units keep outgoing annotations while reference units keep incoming coverage.
    * @evidence contracts/common.md#clear-and-simple-design Check composes inspection, selection indexing and report summarizing.
@@ -156,7 +157,12 @@ export namespace EvidenceUnitCheckProgrammer {
           [
             ...analysis.report.diagnostics.flatMap(
               (diagnostic: IEvidenceDiagnostic): IEvidenceDiagnostic[] =>
-                selectDiagnostic(analysis, selections, diagnostic, includeMissingIds),
+                selectDiagnostic(
+                  analysis,
+                  selections,
+                  diagnostic,
+                  includeMissingIds,
+                ),
             ),
             ...failures,
           ],

@@ -1,5 +1,9 @@
 import { EvidenceCommand } from "@wrtnlabs/evidence";
-import type { IEvidenceCheckReport, IEvidenceCommandResult, IEvidenceConfig } from "@wrtnlabs/evidence";
+import type {
+  IEvidenceCheckReport,
+  IEvidenceCommandResult,
+  IEvidenceConfig,
+} from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -65,7 +69,11 @@ export async function test_command_page(): Promise<void> {
       TestValidator.equals("configured first page", first.page?.page, 1);
       TestValidator.equals("configured second page", second.page?.page, 2);
       TestValidator.equals("two total pages", second.page?.totalPages, 2);
-      TestValidator.equals("different diagnostics", first.diagnostics.length, 1);
+      TestValidator.equals(
+        "different diagnostics",
+        first.diagnostics.length,
+        1,
+      );
       TestValidator.equals("second diagnostic", second.diagnostics.length, 1);
       TestValidator.predicate(
         "no repeated diagnostic",
@@ -77,23 +85,45 @@ export async function test_command_page(): Promise<void> {
           second.diagnostics[0]?.context?.[0]?.text,
       );
       const output: IEvidenceCommandResult = await EvidenceCommand.run(
-        ["--limit", "2", "--page", "2", "--format", "json", "--output", "page.json"],
+        [
+          "--limit",
+          "2",
+          "--page",
+          "2",
+          "--format",
+          "json",
+          "--output",
+          "page.json",
+        ],
         directory,
       );
-      const saved: IEvidenceCheckReport = typia.json.assertParse<IEvidenceCheckReport>(
-        await readFile(join(directory, "page.json"), "utf8"),
-      );
+      const saved: IEvidenceCheckReport =
+        typia.json.assertParse<IEvidenceCheckReport>(
+          await readFile(join(directory, "page.json"), "utf8"),
+        );
       TestValidator.equals("output stdout empty", output.stdout, "");
       TestValidator.equals("override empty page", saved.diagnostics.length, 0);
-      TestValidator.equals("override metadata", [saved.page?.limit, saved.page?.page, saved.page?.totalPages], [2, 2, 1]);
-      TestValidator.equals("output preserves failure", [output.exitCode, saved.exitCode], [1, 1]);
+      TestValidator.equals(
+        "override metadata",
+        [saved.page?.limit, saved.page?.page, saved.page?.totalPages],
+        [2, 2, 1],
+      );
+      TestValidator.equals(
+        "output preserves failure",
+        [output.exitCode, saved.exitCode],
+        [1, 1],
+      );
       const focused: IEvidenceCheckReport = await page(
         "--only",
         "settings.md#safety",
         "--page",
         "2",
       );
-      TestValidator.equals("focus before paging", [focused.page?.eligibleDiagnostics, focused.diagnostics.length], [1, 0]);
+      TestValidator.equals(
+        "focus before paging",
+        [focused.page?.eligibleDiagnostics, focused.diagnostics.length],
+        [1, 0],
+      );
       TestValidator.equals("focused failure", focused.exitCode, 1);
       const invalid: IEvidenceCommandResult = await EvidenceCommand.run(
         ["--config", "plain.json", "--page", "1"],

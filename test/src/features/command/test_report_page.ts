@@ -1,5 +1,8 @@
 import { EvidenceCommand, EvidenceReporter } from "@wrtnlabs/evidence";
-import type { IEvidenceCheckReport, IEvidenceDiagnostic } from "@wrtnlabs/evidence";
+import type {
+  IEvidenceCheckReport,
+  IEvidenceDiagnostic,
+} from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 
 /**
@@ -84,15 +87,31 @@ export function test_report_page(): void {
   TestValidator.equals("page total", second.page?.totalPages, 2);
   TestValidator.predicate(
     "render defaults to first page",
-    EvidenceReporter.render(report, "text", { limit: 2 }).includes("Page 1 of 3"),
+    EvidenceReporter.render(report, "text", { limit: 2 }).includes(
+      "Page 1 of 3",
+    ),
   );
-  TestValidator.equals("second range", [second.page?.start, second.page?.end], [3, 4]);
-  TestValidator.equals("prev and next", [second.page?.hasPrevious, second.page?.hasNext], [true, false]);
+  TestValidator.equals(
+    "second range",
+    [second.page?.start, second.page?.end],
+    [3, 4],
+  );
+  TestValidator.equals(
+    "prev and next",
+    [second.page?.hasPrevious, second.page?.hasNext],
+    [true, false],
+  );
   TestValidator.equals("omission includes unit", second.omittedDiagnostics, 3);
-  TestValidator.equals("status preserved", [second.status, second.exitCode, second.counts], [report.status, report.exitCode, report.counts]);
+  TestValidator.equals(
+    "status preserved",
+    [second.status, second.exitCode, second.counts],
+    [report.status, report.exitCode, report.counts],
+  );
   TestValidator.predicate(
     "text page position",
-    EvidenceReporter.text(second).includes("Page 2 of 2 (limit 2): diagnostics 3-4 of 4 eligible; 5 total"),
+    EvidenceReporter.text(second).includes(
+      "Page 2 of 2 (limit 2): diagnostics 3-4 of 4 eligible; 5 total",
+    ),
   );
   const beyond: IEvidenceCheckReport = EvidenceReporter.narrow(
     report,
@@ -100,29 +119,56 @@ export function test_report_page(): void {
     3,
   );
   TestValidator.equals("beyond empty", codes(beyond), []);
-  TestValidator.equals("beyond request", [beyond.page?.page, beyond.page?.totalPages, beyond.page?.start], [3, 2, undefined]);
-  TestValidator.equals("beyond failure", [beyond.exitCode, beyond.omittedDiagnostics], [1, 5]);
-  TestValidator.predicate("empty page text", EvidenceReporter.text(beyond).includes("Page 3 of 2 (limit 2): empty"));
+  TestValidator.equals(
+    "beyond request",
+    [beyond.page?.page, beyond.page?.totalPages, beyond.page?.start],
+    [3, 2, undefined],
+  );
+  TestValidator.equals(
+    "beyond failure",
+    [beyond.exitCode, beyond.omittedDiagnostics],
+    [1, 5],
+  );
+  TestValidator.predicate(
+    "empty page text",
+    EvidenceReporter.text(beyond).includes("Page 3 of 2 (limit 2): empty"),
+  );
   const distant: IEvidenceCheckReport = EvidenceReporter.narrow(
     report,
     { unit: 2, limit: 2 },
     100,
   );
-  TestValidator.equals("distant page has no adjacent predecessor", distant.page?.hasPrevious, false);
+  TestValidator.equals(
+    "distant page has no adjacent predecessor",
+    distant.page?.hasPrevious,
+    false,
+  );
   const partial: IEvidenceCheckReport = EvidenceReporter.narrow(
     report,
     { limit: 2 },
     3,
   );
   TestValidator.equals("partial final page", codes(partial), ["e"]);
-  TestValidator.equals("partial range", [partial.page?.start, partial.page?.end, partial.page?.totalPages], [5, 5, 3]);
+  TestValidator.equals(
+    "partial range",
+    [partial.page?.start, partial.page?.end, partial.page?.totalPages],
+    [5, 5, 3],
+  );
   const empty: IEvidenceCheckReport = EvidenceReporter.narrow(
     { ...report, diagnostics: [] },
     { limit: 2 },
     1,
   );
-  TestValidator.equals("empty page one of one", [empty.page?.page, empty.page?.totalPages, empty.page?.eligibleDiagnostics], [1, 1, 0]);
-  TestValidator.equals("empty range omitted", [empty.page?.start, empty.page?.end], [undefined, undefined]);
+  TestValidator.equals(
+    "empty page one of one",
+    [empty.page?.page, empty.page?.totalPages, empty.page?.eligibleDiagnostics],
+    [1, 1, 0],
+  );
+  TestValidator.equals(
+    "empty range omitted",
+    [empty.page?.start, empty.page?.end],
+    [undefined, undefined],
+  );
   TestValidator.error("page requires effective limit", () =>
     EvidenceReporter.narrow(report, {}, 1),
   );

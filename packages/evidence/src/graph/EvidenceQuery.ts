@@ -180,6 +180,7 @@ export class EvidenceQuery {
    * Shallow omits descendants. Reference targets retain incoming coverage and
    * claim targets retain outgoing annotations and host policies. Full policy
    * context is preserved; counts and exit status describe the focused outcome.
+   * Context requests retain selected checklist IDs for later source enrichment.
    * This query performs no new source extraction or graph evaluation.
    *
    * @evidence contracts/common.md#principled-implementation The captured check is projected onto selected targets (and descendants unless shallow) while full policy context is kept.
@@ -197,7 +198,12 @@ export class EvidenceQuery {
   ): Promise<IEvidenceCheckReport> {
     const selected: string[] = [...targets];
     return structuredClone(
-      await EvidenceUnitCheckProgrammer.check(this.context, selected, shallow, context),
+      await EvidenceUnitCheckProgrammer.check(
+        this.context,
+        selected,
+        shallow,
+        context,
+      ),
     );
   }
 
@@ -205,7 +211,8 @@ export class EvidenceQuery {
    * Focuses a check through an independently captured query snapshot.
    *
    * Uses inspect's target grammar and the supplied cwd. Unknown, hidden,
-   * ambiguous, and incomplete requests return failing check reports.
+   * ambiguous, and incomplete requests return failing check reports. Context
+   * requests retain selected checklist IDs for later source enrichment.
    *
    * @evidence contracts/common.md#principled-implementation The static form focuses a check through an independently captured snapshot.
    * @evidence contracts/common.md#clear-and-simple-design It wraps construction plus the instance method.

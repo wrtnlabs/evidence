@@ -42,7 +42,8 @@ export namespace EvidenceReporter {
     window: IEvidenceConfigReport = {},
     page?: number,
   ): string {
-    const effectiveLimit: number | undefined = window.limit ?? report.bounds?.limit;
+    const effectiveLimit: number | undefined =
+      window.limit ?? report.bounds?.limit;
     const bounded: IEvidenceCheckReport = narrow(
       report,
       window,
@@ -80,7 +81,9 @@ export namespace EvidenceReporter {
       page !== undefined &&
       (limit === undefined || !Number.isSafeInteger(page) || page < 1)
     )
-      throw new Error("A one-based page requires an effective diagnostic limit.");
+      throw new Error(
+        "A one-based page requires an effective diagnostic limit.",
+      );
     if (limit === undefined && units === undefined) return report;
     const admitted: Set<string> = new Set();
     const selected: IEvidenceDiagnostic[] = [];
@@ -153,6 +156,7 @@ export namespace EvidenceReporter {
    * Renders summary counts followed by actionable diagnostic blocks.
    *
    * Each finding includes configuration context, location, subject, and repair.
+   * A finite limited report also states its one-based page and eligible totals.
    * Missing source coordinates fall back to file or aggregate context rather
    * than implying an invented line number.
    *

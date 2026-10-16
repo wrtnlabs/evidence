@@ -100,7 +100,8 @@ export interface IEvidenceDiagnostic {
   /**
    * Missing reference identities for a checklist host diagnostic.
    *
-   * Focused checks project this list to their selected missing items.
+   * Focused checks supply this list only when source context was requested and
+   * project it to their selected missing items.
    */
   missingUnitIds?: string[];
 
@@ -111,8 +112,6 @@ export interface IEvidenceDiagnostic {
    */
   context?: IEvidenceDiagnosticContext[];
 
-  /**
-   * Missing sections withheld after the per-diagnostic context bound.
-   */
+  /** Missing sections withheld after the per-diagnostic context bound. */
   omittedContext?: number;
 }

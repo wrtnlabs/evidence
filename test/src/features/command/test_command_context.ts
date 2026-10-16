@@ -1,5 +1,12 @@
-import { EvidenceChecker, EvidenceCommand, EvidenceQuery } from "@wrtnlabs/evidence";
-import type { IEvidenceCheckAnalysis, IEvidenceCheckReport } from "@wrtnlabs/evidence";
+import {
+  EvidenceChecker,
+  EvidenceCommand,
+  EvidenceQuery,
+} from "@wrtnlabs/evidence";
+import type {
+  IEvidenceCheckAnalysis,
+  IEvidenceCheckReport,
+} from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import { dedent } from "@typia/utils";
 import { join } from "node:path";
@@ -13,11 +20,12 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  * An agent needs the actual required section beside a missing acknowledgement,
  * including checklist items that share one host-level diagnostic.
  *
- * 1. Check two unanswered Markdown sections and require their distinct bodies
- *    in JSON and text only when context is requested.
+ * 1. Check two unanswered Markdown sections and require their distinct bodies in
+ *    JSON and text only when context is requested.
  * 2. Focus one section and require the unrelated sibling to be absent.
  * 3. Enable checklist mode and require both missing sections on its one host.
- * 4. Mutate a source after analysis and require context from the captured snapshot.
+ * 4. Mutate a source after analysis and require context from the captured
+ *    snapshot.
  * 5. Bound a long section with explicit omitted lines and characters.
  * 6. Leave non-Markdown errors unchanged and reject context on other commands.
  *
@@ -62,7 +70,11 @@ export async function test_command_context(): Promise<void> {
       const report: IEvidenceCheckReport =
         typia.json.assertParse<IEvidenceCheckReport>(enriched.stdout);
       TestValidator.equals("missing result", enriched.exitCode, 1);
-      TestValidator.equals("ordinary diagnostics", report.diagnostics.length, 2);
+      TestValidator.equals(
+        "ordinary diagnostics",
+        report.diagnostics.length,
+        2,
+      );
       TestValidator.predicate(
         "safety body",
         enriched.stdout.includes("Check the configured treatment limit."),
@@ -105,8 +117,16 @@ export async function test_command_context(): Promise<void> {
       );
       const boundedReport: IEvidenceCheckReport =
         typia.json.assertParse<IEvidenceCheckReport>(bounded.stdout);
-      TestValidator.equals("context window", boundedReport.diagnostics.length, 1);
-      TestValidator.equals("context omitted", boundedReport.omittedDiagnostics, 1);
+      TestValidator.equals(
+        "context window",
+        boundedReport.diagnostics.length,
+        1,
+      );
+      TestValidator.equals(
+        "context omitted",
+        boundedReport.omittedDiagnostics,
+        1,
+      );
       const analysis: IEvidenceCheckAnalysis = await new EvidenceChecker(
         join(directory, "evidence.config.json"),
       ).analyze();
@@ -121,9 +141,8 @@ export async function test_command_context(): Promise<void> {
         "captured source survives edit",
         captured.diagnostics.some(
           (diagnostic): boolean =>
-            diagnostic.context?.some(
-              (section): boolean =>
-                section.text.includes("Check the configured treatment limit."),
+            diagnostic.context?.some((section): boolean =>
+              section.text.includes("Check the configured treatment limit."),
             ) === true,
         ) && !JSON.stringify(captured).includes("New unrelated text."),
       );
@@ -209,7 +228,8 @@ export async function test_command_context(): Promise<void> {
         "## Long {#long}\n" +
         Array.from(
           { length: 50 },
-          (_: unknown, index: number): string => `Line ${index + 1}: ${"λ".repeat(210)}`,
+          (_: unknown, index: number): string =>
+            `Line ${index + 1}: ${"λ".repeat(210)}`,
         ).join("\n") +
         "\n",
     },
@@ -260,8 +280,16 @@ export async function test_command_context(): Promise<void> {
       const report: IEvidenceCheckReport =
         typia.json.assertParse<IEvidenceCheckReport>(enriched.stdout);
       TestValidator.equals("non-Markdown error", report.exitCode, 1);
-      TestValidator.equals("non-Markdown output unchanged", enriched.stdout, plain.stdout);
-      TestValidator.equals("non-Markdown has no context", report.diagnostics[0]?.context, undefined);
+      TestValidator.equals(
+        "non-Markdown output unchanged",
+        enriched.stdout,
+        plain.stdout,
+      );
+      TestValidator.equals(
+        "non-Markdown has no context",
+        report.diagnostics[0]?.context,
+        undefined,
+      );
     },
   );
 }
