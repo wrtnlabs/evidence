@@ -36,7 +36,7 @@ import type { IEvidenceTtsxManifest } from "./IEvidenceTtsxManifest";
  * @evidence contracts/common.md#meaningful-documentation The comment explains the consumer-compiler choice and the serialization; each helper documents its own boundary.
  * @evidence contracts/performance.md#efficient-algorithms One ttsx process per evaluation; cost is dominated by type checking in the child.
  * @evidenceExclude contracts/performance.md#reuse-equivalent-work Each evaluation must start with a fresh project so watch sees configuration edits; results are deliberately not reused.
- * @evidence contracts/performance.md#bound-retention-and-release-resources The temporary project is removed in finally with retries, and the child process settles the promise on close.
+ * @evidence contracts/performance.md#bound-retention-and-release-resources The temporary project is removed in finally with retries, and the child process settles the promise on close. When the system temp directory is on another volume, the empty `.tmp/evidence-config` base directory beside the dependency tree is kept for reuse.
  */
 export async function evaluateTypeScriptConfig(
   configFile: string,
