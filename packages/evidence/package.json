@@ -20,20 +20,15 @@
     "@prisma/prisma-schema-wasm": "catalog:prisma",
     "@typia/interface": "catalog:samchon",
     "@typia/utils": "catalog:samchon",
-    "@types/node": "catalog:utils",
     "tstl": "catalog:samchon",
     "typia": "catalog:samchon",
-    "typescript-runtime": "catalog:typescript",
     "web-tree-sitter": "catalog:tree-sitter",
     "yaml": "catalog:utils"
-  },
-  "peerDependencies": {
-    "ttsc": "catalog:typescript",
-    "typescript": "catalog:typescript"
   },
   "devDependencies": {
     "@ttsc/evidence": "catalog:typescript",
     "@ttsc/lint": "catalog:typescript",
+    "@types/node": "catalog:utils",
     "rimraf": "catalog:utils",
     "ttsc": "catalog:typescript",
     "typescript": "catalog:typescript"

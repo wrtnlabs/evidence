@@ -2,9 +2,9 @@
  * Nearest package metadata relevant to the configuration evaluator's module
  * decision.
  *
- * The in-memory evaluator and watch dependency scanner validate this projection
- * while walking upward from a config file. Its module mode determines static
- * import conditions and the format of executable configuration output.
+ * `configModule` reads this parsed projection while walking upward from a
+ * config file. It models only the package field that can change the temporary
+ * evaluator project's compiler module kind.
  *
  * @evidence contracts/common.md#principled-implementation The package type field is the only metadata that changes how the evaluator treats a module's format.
  * @evidence contracts/common.md#clear-and-simple-design Only the needed field is modeled.

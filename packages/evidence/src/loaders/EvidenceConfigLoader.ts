@@ -14,10 +14,11 @@ import type { IEvidenceConfigPlan } from "../structures/IEvidenceConfigPlan";
 /**
  * Loads and validates Evidence configuration before artifact I/O begins.
  *
- * JSON is read as data; TypeScript is compiled and evaluated in memory with
- * output isolated from report stdout. Validation covers disabled declarations
- * too. Call load to retain authored configuration or plan to resolve inherited
- * policy and remove inactive populations before source discovery.
+ * JSON is read as data; TypeScript is evaluated through the consumer's ttsx
+ * with output isolated from report stdout. Validation covers disabled
+ * declarations too. Call load to retain authored configuration or plan to
+ * resolve inherited policy and remove inactive populations before source
+ * discovery.
  *
  * @example
  *   const plan: IEvidenceConfigPlan = await EvidenceConfigLoader.plan(

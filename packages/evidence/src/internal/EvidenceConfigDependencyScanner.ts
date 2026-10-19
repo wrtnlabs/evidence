@@ -19,7 +19,6 @@ import type { IEvidenceConfigPackageBoundary } from "./IEvidenceConfigPackageBou
 import type { IEvidenceConfigPackageScope } from "./IEvidenceConfigPackageScope";
 import type { IEvidenceConfigResolutionManifest } from "./IEvidenceConfigResolutionManifest";
 import { EvidenceSourcePath } from "./EvidenceSourcePath";
-import { evidenceConfigModuleCandidates } from "./evidenceConfigModuleCandidates";
 
 /**
  * Finds static local and package-resolution dependencies of one evaluated
@@ -635,11 +634,7 @@ export class EvidenceConfigDependencyScanner {
    * higher-precedence file can restart resolution.
    */
   private async resolvePath(base: string): Promise<string[]> {
-    const candidates: string[] = evidenceConfigModuleCandidates(
-      base,
-      path.extname(base).toLowerCase(),
-      path.join,
-    );
+    const candidates: string[] = moduleCandidates(base);
     for (const candidate of candidates) {
       this.watch(EvidenceSourcePath.slash(candidate), false);
       try {
@@ -1667,6 +1662,46 @@ function programmingType(file: string): EvidenceProgrammingType | undefined {
 }
 
 /**
+ * Produces the supported local TypeScript and JavaScript extension fallback
+ * order.
+ *
+ * Local import resolution uses this ordered list to match configuration
+ * evaluation and register each candidate for watch recovery.
+ */
+function moduleCandidates(base: string): string[] {
+  const extension: string = path.extname(base).toLowerCase();
+  if (extension === ".js" || extension === ".jsx")
+    return unique([
+      replaceExtension(base, ".ts"),
+      replaceExtension(base, ".tsx"),
+      base,
+    ]);
+  if (extension === ".mjs")
+    return unique([replaceExtension(base, ".mts"), base]);
+  if (extension === ".cjs")
+    return unique([replaceExtension(base, ".cts"), base]);
+  if (extension !== "") return [base];
+  const extensions: string[] = [
+    ".ts",
+    ".tsx",
+    ".mts",
+    ".cts",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".json",
+  ];
+  return unique([
+    base,
+    ...extensions.map((value: string): string => base + value),
+    ...extensions.map((value: string): string =>
+      path.join(base, "index" + value),
+    ),
+  ]);
+}
+
+/**
  * Lists CommonJS legacy file candidates without compiler source substitution.
  *
  * Node checks the authored path before its JavaScript, JSON, and native
@@ -1677,6 +1712,16 @@ function runtimeCandidates(base: string): string[] {
   return unique([base, `${base}.js`, `${base}.json`, `${base}.node`]).map(
     (candidate: string): string => EvidenceSourcePath.slash(candidate),
   );
+}
+
+/**
+ * Replaces an existing extension without applying path normalization.
+ *
+ * Candidate generation preserves the authored base path while trying TypeScript
+ * counterparts for JavaScript spellings.
+ */
+function replaceExtension(file: string, extension: string): string {
+  return file.slice(0, -path.extname(file).length) + extension;
 }
 
 /**

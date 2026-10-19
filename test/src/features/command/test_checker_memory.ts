@@ -11,8 +11,8 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  * failure.
  *
  * Configuration evaluation, parser acquisition, and graph checking must compose
- * without adding temporary projects, emitted files, or grammar cache
- * directories.
+ * without leaving temporary projects, emitted files, or grammar cache
+ * directories in the checked project.
  *
  * 1. Check a TS configuration and a documented function citing its Markdown
  *    requirement; require success and only the three authored project files.

@@ -19,7 +19,6 @@ catalogs:
     "@ttsc/evidence": *ttsc
     "@ttsc/lint": *ttsc
     typescript: ^7.0.2
-    typescript-runtime: npm:typescript@6.0.3
     prettier: ^3.9.6
   utils:
     "@types/node": ^22.20.2

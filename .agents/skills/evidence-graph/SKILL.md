@@ -12,7 +12,6 @@ The README's graph rules, configuration, tags and targets, and languages section
 - Port behavior from the [pinned ttsc domain contract](https://github.com/samchon/ttsc/blob/14a22f077caf23f1bfb8a97b3d9db765912074ef/.agents/skills/project/evidence/SKILL.md) and its linked regressions, and keep each intentional migration difference explicit. Configuration types follow `D:/github/samchon/ttsc/packages/evidence`, generalized into the `Programming` and `Database` families, with no `language` setting beside `type`.
 - Keep language rules in adapters; the graph consumes only `IEvidenceInventory`. Fix missing extraction in its adapter, never by changing a coverage policy.
 - Never make a graph pass by excluding, retargeting, or deleting an author's citation, by shrinking a population, or by reporting an incomplete inventory as complete, and never add a rule that judges whether a reason is sincere.
-- Configuration evaluation never runs through `ttsx` or its disk cache.
 
 ## Adding A Language
 
