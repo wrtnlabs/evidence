@@ -50,7 +50,7 @@ npx evidence init
 npx evidence
 ```
 
-`typescript` and [`ttsc`](https://github.com/samchon/ttsc) are peer dependencies. Configuration is typechecked and evaluated in memory without a project `tsconfig.json`. Grammars download into memory on first use in each process. Replace the generated configuration as shown next.
+Grammars download into memory on first use in each process. Replace the generated configuration as shown next.
 
 ### 1.2. Start with principles
 
