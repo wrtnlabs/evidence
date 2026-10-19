@@ -203,13 +203,16 @@ export async function evaluateTypeScriptConfig(
  * Config loading owns the failure boundary, while this helper preserves
  * TypeScript and runtime diagnostics in their original format.
  */
-function runEvaluator(
+async function runEvaluator(
   configFile: string,
   args: string[],
   writeDiagnostic: (content: string) => void,
 ): Promise<void> {
-  return new Promise<void>(
-    (resolve: () => void, reject: (cause: Error) => void): void => {
+  await new Promise<undefined>(
+    (
+      resolve: (value: undefined) => void,
+      reject: (cause: Error) => void,
+    ): void => {
       const child: ChildProcess = spawn(process.execPath, args, {
         cwd: path.dirname(configFile),
         stdio: ["ignore", "pipe", "pipe"],
@@ -233,7 +236,7 @@ function runEvaluator(
       child.once(
         "close",
         (code: number | null, signal: NodeJS.Signals | null): void => {
-          if (code === 0) resolve();
+          if (code === 0) resolve(undefined);
           else
             reject(
               new Error(
