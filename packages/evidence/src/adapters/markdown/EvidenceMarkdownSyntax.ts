@@ -213,32 +213,52 @@ export namespace EvidenceMarkdownSyntax {
    * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources The function keeps no state after returning; its result is owned by the caller.
    */
   export function inlineCode(line: string, column: number): boolean {
-    let cursor = 0;
+    return inlineSpans(line).some(
+      (span: readonly [number, number]): boolean =>
+        column >= span[0] && column < span[1],
+    );
+  }
+
+  /**
+   * Returns ordered half-open closed code spans; unmatched delimiters remain
+   * prose.
+   *
+   * @evidence contracts/common.md#principled-implementation Unescaped equal-length backtick runs close code spans greedily; an unmatched opening leaves the remaining line outside code exactly as the previous column predicate did.
+   * @evidence contracts/common.md#clear-and-simple-design The syntax helper owns delimiter interpretation; the scanner consumes its ordered intervals without interpreting backticks again.
+   * @evidence contracts/common.md#prohibited-implementation-shortcuts Escaped and unmatched backtick runs retain the established closed-span behavior; only complete matching delimiter pairs suppress annotations.
+   * @evidence contracts/common.md#meaningful-documentation The comment and return type describe closed spans as ordered half-open offset pairs for one physical line.
+   * @evidence contracts/performance.md#efficient-algorithms Delimiter searches consume disjoint portions of the line, so collecting all spans costs O(line length); membership is handled by the ordered scanner cursor.
+   * @evidence contracts/performance.md#reuse-equivalent-work The Markdown scanner computes the span list once and shares it across token positions on that line.
+   * @evidence contracts/performance.md#bound-retention-and-release-resources The returned offset pairs belong to the line scan and retain no source text or parser resource.
+   */
+  export function inlineSpans(line: string): Array<readonly [number, number]> {
+    const spans: Array<readonly [number, number]> = [];
+    let cursor: number = 0;
     while (cursor < line.length) {
-      const opening = line.indexOf("`", cursor);
-      if (opening < 0) return false;
-      const length = delimiterLength(line, opening);
+      const opening: number = line.indexOf("`", cursor);
+      if (opening < 0) return spans;
+      const length: number = delimiterLength(line, opening);
       if (escaped(line, opening)) {
         cursor = opening + length;
         continue;
       }
-      let closing = opening + length;
-      let closed = false;
+      let closing: number = opening + length;
+      let closed: boolean = false;
       while (closing < line.length) {
         closing = line.indexOf("`", closing);
-        if (closing < 0) return false;
-        const candidate = delimiterLength(line, closing);
+        if (closing < 0) return spans;
+        const candidate: number = delimiterLength(line, closing);
         if (candidate === length && !escaped(line, closing)) {
           closed = true;
           break;
         }
         closing += candidate;
       }
-      if (!closed) return false;
-      if (column >= opening && column < closing + length) return true;
+      if (!closed) return spans;
+      spans.push([opening, closing + length]);
       cursor = closing + length;
     }
-    return false;
+    return spans;
   }
 
   /**

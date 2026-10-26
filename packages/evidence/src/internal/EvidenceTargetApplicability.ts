@@ -1,3 +1,4 @@
+import { EvidenceTargetFileIndex } from "./EvidenceTargetFileIndex";
 import path from "node:path";
 
 import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
@@ -37,14 +38,15 @@ export namespace EvidenceTargetApplicability {
    * @evidence contracts/common.md#clear-and-simple-design Scoring helpers are private; select only compares scores and keeps configuration order.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Ties keep every viable reference instead of guessing one.
    * @evidence contracts/common.md#meaningful-documentation The comment explains tie retention.
-   * @evidence contracts/performance.md#efficient-algorithms Cost is O(R x A) per statement for R references and A source addresses; the registry-backed type set is computed once at module load, so scoring clones no catalog.
-   * @evidenceExclude contracts/performance.md#reuse-equivalent-work Selection depends on each statement and host; results are not shared across statements.
+   * @evidence contracts/performance.md#efficient-algorithms Cost is O(R) per statement after indexing A source addresses once per immutable inventory in the supplied session; the registry-backed type set is computed once at module load, so scoring clones no catalog.
+   * @evidence contracts/performance.md#reuse-equivalent-work Only selected file membership is shared within the optional caller-owned session; statement and host scoring remains independent.
    * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources Selection keeps no state after returning; its result is owned by the caller.
    */
   export function select(
     statement: IEvidenceTargetStatement,
     host: IEvidenceHost,
     references: IEvidenceMaterializedReference[],
+    indexes: EvidenceTargetFileIndex = new EvidenceTargetFileIndex(),
   ): IEvidenceMaterializedReference[] {
     if (statement.target.startsWith("prisma:"))
       return references.filter(
@@ -57,7 +59,7 @@ export namespace EvidenceTargetApplicability {
 
     const scores = references.map((reference) => ({
       reference,
-      score: affinity(statement.target, host, reference),
+      score: affinity(statement.target, host, reference, indexes),
     }));
     const maximum = Math.max(0, ...scores.map((entry) => entry.score));
     if (maximum > 1)
@@ -84,6 +86,7 @@ function affinity(
   target: string,
   host: IEvidenceHost,
   reference: IEvidenceMaterializedReference,
+  indexes: EvidenceTargetFileIndex,
 ): number {
   const type = reference.plan.population.type;
   if (type === "prisma" || type === "swagger") return 0;
@@ -94,28 +97,15 @@ function affinity(
     } catch {
       return 0;
     }
-    const exact = reference.inventory.sources.some((source) =>
-      source.addresses.some(
-        (address) =>
-          address.selected !== false &&
-          EvidenceMarkdownTarget.normalize(address.relative) === file,
-      ),
-    );
+    const exact: boolean = indexes.markdown(reference.inventory).has(file);
     return exact ? 3 : markdownLike(file) ? 2 : 1;
   }
 
   const parsed = parseFileTargets(target, host);
   if (parsed.length !== 0) {
-    const exact = reference.inventory.sources.some((source) =>
-      source.addresses.some(
-        (address) =>
-          address.selected !== false &&
-          parsed.some(
-            (targetAddress) =>
-              EvidenceFileTarget.normalize(address.absolute) ===
-              EvidenceFileTarget.normalize(targetAddress.file),
-          ),
-      ),
+    const files: ReadonlySet<string> = indexes.absolute(reference.inventory);
+    const exact: boolean = parsed.some((address: IEvidenceAddress): boolean =>
+      files.has(EvidenceFileTarget.normalize(address.file)),
     );
     if (exact) return 3;
   }

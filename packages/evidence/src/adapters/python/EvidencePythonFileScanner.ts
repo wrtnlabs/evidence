@@ -1,3 +1,4 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
 import type { EvidenceParseSession } from "../../parsers/EvidenceParseSession";
@@ -34,6 +35,24 @@ import { EvidenceSourceText } from "../../internal/EvidenceSourceText";
  * @evidence contracts/performance.md#bound-retention-and-release-resources The scanner copies names and ranges into node-free records before the parse session closes.
  */
 export class EvidencePythonFileScanner {
+  /** Effective records by occurrence ID for replacement and subtree removal. */
+  private readonly unitIds: Map<string, IEvidencePythonOwnedUnit> = new Map();
+
+  /** Semantic storage key per effective occurrence ID. */
+  private readonly unitKeys: Map<string, string> = new Map();
+
+  /** Top-level semantic storage keys per executed binding root. */
+  private readonly rootUnits: Map<string, Set<string>> = new Map();
+
+  /** Effective child occurrences grouped by explicit parent identity. */
+  private readonly childUnits: Map<string, Set<string>> = new Map();
+
+  /** Class dictionary slots pointing at each effective occurrence. */
+  private readonly classSlots: Map<string, Set<string>> = new Map();
+
+  /** Constructor owners retaining each generated occurrence. */
+  private readonly constructorOwners: Map<string, Set<string>> = new Map();
+
   /**
    * Records the file's statically understood `__all__` state and names.
    *
@@ -745,6 +764,9 @@ export class EvidencePythonFileScanner {
       this.constructorUnits.set(parentId, units);
     }
     units.add(unitId);
+    const owners: Set<string> = this.constructorOwners.get(unitId) ?? new Set();
+    owners.add(parentId);
+    this.constructorOwners.set(unitId, owners);
   }
 
   /**
@@ -794,15 +816,33 @@ export class EvidencePythonFileScanner {
         ...(parentId === undefined ? {} : { parentId }),
       };
       record = { unit, roots: [root], suffix };
+      const previous: IEvidencePythonOwnedUnit | undefined =
+        this.units.get(semanticId);
+      if (previous !== undefined) this.forgetUnit(previous);
       this.units.set(semanticId, record);
+      this.unitIds.set(id, record);
+      this.unitKeys.set(id, semanticId);
+      if (parentId !== undefined) {
+        const children: Set<string> =
+          this.childUnits.get(parentId) ?? new Set();
+        children.add(id);
+        this.childUnits.set(parentId, children);
+      }
     } else {
       if (!record.roots.includes(root)) record.roots.push(root);
-      const previous = record.unit.sites.find(
-        (candidate) => candidate.id === site.id,
+      const previous: IEvidenceUnitSite | undefined = EvidenceUnitSites.append(
+        record.unit,
+        site,
+        false,
       );
-      if (previous === undefined) record.unit.sites.push(site);
-      else previous.content.push(content);
+      if (previous !== undefined) previous.content.push(content);
     }
+    if (record.suffix.length === 0)
+      for (const name of record.roots) {
+        const keys: Set<string> = this.rootUnits.get(name) ?? new Set();
+        keys.add(semanticId);
+        this.rootUnits.set(name, keys);
+      }
     const unitId: string = record.unit.id;
     this.registerPosition(wrapper, siteId, unitId);
     this.attachPrecedingComment(wrapper, siteId, unitId);
@@ -829,10 +869,7 @@ export class EvidencePythonFileScanner {
     if (previous === undefined) return;
     if (
       mergeSymbol !== undefined &&
-      Array.from(this.units.values()).some(
-        (record: IEvidencePythonOwnedUnit): boolean =>
-          record.unit.id === previous && record.unit.symbol === mergeSymbol,
-      )
+      this.unitIds.get(previous)?.unit.symbol === mergeSymbol
     )
       return;
     this.removeUnitTrees([previous]);
@@ -850,14 +887,12 @@ export class EvidencePythonFileScanner {
     root: string,
     mergeSymbol: EvidenceProgrammingSymbol,
   ): void {
-    const removed: string[] = Array.from(this.units.values())
-      .filter(
-        (record: IEvidencePythonOwnedUnit): boolean =>
-          record.suffix.length === 0 &&
-          record.roots.includes(root) &&
-          record.unit.symbol !== mergeSymbol,
-      )
-      .map((record: IEvidencePythonOwnedUnit): string => record.unit.id);
+    const removed: string[] = [];
+    for (const key of this.rootUnits.get(root) ?? []) {
+      const record: IEvidencePythonOwnedUnit | undefined = this.units.get(key);
+      if (record !== undefined && record.unit.symbol !== mergeSymbol)
+        removed.push(record.unit.id);
+    }
     this.removeUnitTrees(removed);
   }
 
@@ -869,40 +904,47 @@ export class EvidencePythonFileScanner {
    * a later declaration that reuses the same semantic name.
    */
   private removeUnitTrees(unitIds: Iterable<string>): void {
-    const removed: Set<string> = new Set<string>(unitIds);
-    let changed: boolean = true;
-    while (changed) {
-      changed = false;
-      const records: IterableIterator<IEvidencePythonOwnedUnit> =
-        this.units.values();
-      for (const record of records)
-        if (
-          record.unit.parentId !== undefined &&
-          removed.has(record.unit.parentId) &&
-          !removed.has(record.unit.id)
-        ) {
-          removed.add(record.unit.id);
-          changed = true;
-        }
+    const pending: string[] = Array.from(unitIds);
+    const removed: Set<string> = new Set();
+    while (pending.length !== 0) {
+      const id: string | undefined = pending.pop();
+      if (id === undefined || removed.has(id)) continue;
+      removed.add(id);
+      for (const child of this.childUnits.get(id) ?? []) pending.push(child);
     }
-    const unitEntries: IterableIterator<[string, IEvidencePythonOwnedUnit]> =
-      this.units.entries();
-    for (const [key, record] of unitEntries)
-      if (removed.has(record.unit.id)) this.units.delete(key);
-    const classEntries: IterableIterator<[string, string]> =
-      this.classBindings.entries();
-    for (const [key, unitId] of classEntries)
-      if (removed.has(unitId)) this.classBindings.delete(key);
-    const constructorEntries: IterableIterator<[string, Set<string>]> =
-      this.constructorUnits.entries();
-    for (const [parentId, unitIds] of constructorEntries) {
-      if (removed.has(parentId)) {
-        this.constructorUnits.delete(parentId);
-        continue;
+    for (const id of removed) {
+      const record: IEvidencePythonOwnedUnit | undefined = this.unitIds.get(id);
+      if (record !== undefined) this.forgetUnit(record);
+      this.childUnits.delete(id);
+      for (const key of this.classSlots.get(id) ?? [])
+        if (this.classBindings.get(key) === id) this.classBindings.delete(key);
+      this.classSlots.delete(id);
+      this.constructorUnits.delete(id);
+      for (const owner of this.constructorOwners.get(id) ?? [])
+        this.constructorUnits.get(owner)?.delete(id);
+      this.constructorOwners.delete(id);
+    }
+  }
+
+  /**
+   * Removes one effective record from its storage and reverse ownership
+   * indexes.
+   */
+  private forgetUnit(record: IEvidencePythonOwnedUnit): void {
+    const id: string = record.unit.id;
+    const key: string | undefined = this.unitKeys.get(id);
+    if (key !== undefined) {
+      if (this.units.get(key) === record) this.units.delete(key);
+      for (const root of record.roots) {
+        const entries: Set<string> | undefined = this.rootUnits.get(root);
+        entries?.delete(key);
+        if (entries?.size === 0) this.rootUnits.delete(root);
       }
-      for (const unitId of unitIds)
-        if (removed.has(unitId)) unitIds.delete(unitId);
     }
+    if (record.unit.parentId !== undefined)
+      this.childUnits.get(record.unit.parentId)?.delete(id);
+    this.unitKeys.delete(id);
+    this.unitIds.delete(id);
   }
 
   /**
@@ -916,7 +958,13 @@ export class EvidencePythonFileScanner {
     name: string,
     unitId: string,
   ): void {
-    this.classBindings.set(this.classBindingKey(parentId, name), unitId);
+    const key: string = this.classBindingKey(parentId, name);
+    const previous: string | undefined = this.classBindings.get(key);
+    if (previous !== undefined) this.classSlots.get(previous)?.delete(key);
+    this.classBindings.set(key, unitId);
+    const slots: Set<string> = this.classSlots.get(unitId) ?? new Set();
+    slots.add(key);
+    this.classSlots.set(unitId, slots);
   }
 
   /**

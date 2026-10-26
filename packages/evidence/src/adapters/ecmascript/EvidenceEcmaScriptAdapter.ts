@@ -1,7 +1,7 @@
 import typia from "typia";
 
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
@@ -237,7 +237,7 @@ export abstract class EvidenceEcmaScriptAdapter<
         retained,
       );
       this.materializeComments(inventory, analyses, stablePublished);
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     } finally {
       await parser.close();
     }

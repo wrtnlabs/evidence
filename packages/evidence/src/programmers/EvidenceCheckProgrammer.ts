@@ -1,9 +1,12 @@
-import { EvidenceGraph } from "../graph/EvidenceGraph";
+import { EvidenceSourceAcquisition } from "../internal/EvidenceSourceAcquisition";
+import { EvidenceTargetFileIndex } from "../internal/EvidenceTargetFileIndex";
+import { EvidenceGraphEvaluator } from "../internal/EvidenceGraphEvaluator";
+import { EvidenceAnalysisIndexes } from "../internal/EvidenceAnalysisIndexes";
 import { EvidenceSourceLoader } from "../loaders/EvidenceSourceLoader";
-import { EvidenceInventory } from "../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../internal/EvidenceInventoryIndex";
 import { EvidenceDetachedEvidence } from "../internal/EvidenceDetachedEvidence";
 import { EvidenceSwaggerAdapter } from "../adapters/swagger/EvidenceSwaggerAdapter";
-import { EvidenceTargetResolver } from "../targets/EvidenceTargetResolver";
+import type { EvidenceTargetResolverIndex } from "../internal/EvidenceTargetResolverIndex";
 import { EvidenceAdapterFactory } from "../internal/EvidenceAdapterFactory";
 import { EvidenceStatementOwnership } from "../internal/EvidenceStatementOwnership";
 import { EvidenceTargetApplicability } from "../internal/EvidenceTargetApplicability";
@@ -73,15 +76,19 @@ export namespace EvidenceCheckProgrammer {
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Selection uses only configured symbol kinds, so structural ancestors never become extra obligations.
    * @evidence contracts/common.md#meaningful-documentation The comment explains ordering, concurrent loading and shared detached owner validation.
    * @evidence contracts/performance.md#efficient-algorithms Loads run concurrently; cross-claim orphan detection scans the resolved H1 records once per claim.
-   * @evidence contracts/performance.md#reuse-equivalent-work Populations with the same type, root and file selection share one load within a materialization, and each consumer receives its own clone, so identical selections are scanned and parsed once.
+   * @evidence contracts/performance.md#reuse-equivalent-work Populations with the same type, root and file selection share one immutable load within a materialization; claim-local diagnostic arrays are copied before appending, so identical selections are scanned and parsed once.
    * @evidence contracts/performance.md#bound-retention-and-release-resources Inventories are owned by the returned claims; adapters and collectors release their resources before returning. The shared-load map is local to one call and released when it returns.
    */
   export async function materialize(
     plan: IEvidenceConfigPlan,
   ): Promise<IEvidenceMaterializedClaim[]> {
+    if (EvidenceSourceAcquisition.current() === undefined)
+      return EvidenceSourceAcquisition.run(
+        (): Promise<IEvidenceMaterializedClaim[]> => materialize(plan),
+      );
     // Several claims and references often select the same files. Load each
-    // distinct selection once and give every consumer its own copy, because
-    // later preparation mutates inventories in place.
+    // distinct selection once. Claim-local findings use a separate diagnostic
+    // array so source, unit and annotation records stay immutable.
     const loads: Map<string, Promise<IEvidenceInventory>> = new Map();
     function loader(
       population: IEvidenceClaim | IEvidenceReference,
@@ -116,6 +123,10 @@ export namespace EvidenceCheckProgrammer {
           !completeClaims.has(claim)
         )
           continue;
+        claim.inventory = {
+          ...claim.inventory,
+          diagnostics: [...claim.inventory.diagnostics],
+        };
         claim.inventory.diagnostics.push({
           code: "evidence-files-owner",
           severity: "error",
@@ -150,9 +161,17 @@ export namespace EvidenceCheckProgrammer {
   export async function evaluate(
     context: IEvidenceCheckContext,
   ): Promise<IEvidenceCheckAnalysis> {
-    const contexts: IEvidenceClaimContext[] = context.claims.map(openClaim);
+    const indexes: EvidenceAnalysisIndexes = new EvidenceAnalysisIndexes();
+    const files: EvidenceTargetFileIndex = new EvidenceTargetFileIndex();
+    const contexts: IEvidenceClaimContext[] = context.claims.map(
+      (claim: IEvidenceMaterializedClaim): IEvidenceClaimContext =>
+        openClaim(claim, files),
+    );
     const claims: IEvidenceGraphClaim[] = await Promise.all(
-      contexts.map(closeClaim),
+      contexts.map(
+        (claim: IEvidenceClaimContext): Promise<IEvidenceGraphClaim> =>
+          closeClaim(claim, indexes),
+      ),
     );
     // Claims that read the same host files see the same annotations. Settle
     // which claim answers for each before participation is judged, so one claim
@@ -165,7 +184,9 @@ export namespace EvidenceCheckProgrammer {
         prepared.reviews,
       );
     const graphInput: IEvidenceGraphInput = { claims };
-    const graph = EvidenceGraph.evaluate(graphInput);
+    const graph: IEvidenceGraphResult = new EvidenceGraphEvaluator(
+      graphInput,
+    ).evaluate();
     return { graphInput, graph, report: report(context.plan, graph) };
   }
 
@@ -257,7 +278,10 @@ export namespace EvidenceCheckProgrammer {
       inventory:
         separate === undefined
           ? inventory
-          : new EvidenceInventory([inventory, separate.inventory]).snapshot(),
+          : new EvidenceInventoryIndex([
+              inventory,
+              separate.inventory,
+            ]).snapshot(),
       unitIds,
       ...(separate === undefined
         ? {}
@@ -278,12 +302,13 @@ export namespace EvidenceCheckProgrammer {
   }
 
   /**
-   * Loads a population once per distinct selection and returns a private copy.
+   * Loads a population once per distinct selection and borrows its immutable
+   * records.
    *
    * The key is everything that decides adapter input: artifact type, root, and
    * the file globs or Swagger document. Equal keys within one materialization
-   * share a single load, and each caller receives its own clone because claim
-   * preparation mutates inventories in place.
+   * share a single load, and consumers borrow records; claim preparation copies
+   * its diagnostic array.
    */
   async function shared(
     loads: Map<string, Promise<IEvidenceInventory>>,
@@ -301,7 +326,7 @@ export namespace EvidenceCheckProgrammer {
       pending = load(configFile, population);
       loads.set(key, pending);
     }
-    return structuredClone(await pending);
+    return pending;
   }
 
   /**
@@ -389,10 +414,12 @@ export namespace EvidenceCheckProgrammer {
    */
   function openClaim(
     materialized: IEvidenceMaterializedClaim,
+    files: EvidenceTargetFileIndex,
   ): IEvidenceClaimContext {
-    const inventory: IEvidenceInventory = structuredClone(
-      materialized.inventory,
-    );
+    const inventory: IEvidenceInventory = {
+      ...materialized.inventory,
+      diagnostics: [...materialized.inventory.diagnostics],
+    };
     const context: IEvidenceClaimContext = {
       materialized,
       inventory,
@@ -411,6 +438,7 @@ export namespace EvidenceCheckProgrammer {
           declaration,
           requireHost(hosts, declaration.hostId),
           materialized.references,
+          files,
         ),
       );
     for (const review of inventory.reviews)
@@ -420,6 +448,7 @@ export namespace EvidenceCheckProgrammer {
           review,
           requireHost(hosts, review.hostId),
           materialized.references,
+          files,
         ),
       );
     return context;
@@ -434,6 +463,7 @@ export namespace EvidenceCheckProgrammer {
    */
   async function closeClaim(
     context: IEvidenceClaimContext,
+    indexes: EvidenceAnalysisIndexes,
   ): Promise<IEvidenceGraphClaim> {
     const { materialized, inventory } = context;
     return {
@@ -452,7 +482,7 @@ export namespace EvidenceCheckProgrammer {
         : { exclusionHostIds: materialized.exclusionHostIds }),
       references: await Promise.all(
         materialized.references.map((reference, position) =>
-          prepareReference(context, reference, position),
+          prepareReference(context, reference, position, indexes),
         ),
       ),
     };
@@ -470,10 +500,16 @@ export namespace EvidenceCheckProgrammer {
     statement: Parameters<typeof EvidenceTargetApplicability.select>[0],
     host: IEvidenceHost,
     references: IEvidenceMaterializedReference[],
+    files: EvidenceTargetFileIndex,
   ): Set<number> {
     return new Set(
-      EvidenceTargetApplicability.select(statement, host, references).map(
-        (selected) => references.indexOf(selected),
+      EvidenceTargetApplicability.select(
+        statement,
+        host,
+        references,
+        files,
+      ).map((selected: IEvidenceMaterializedReference): number =>
+        references.indexOf(selected),
       ),
     );
   }
@@ -491,10 +527,11 @@ export namespace EvidenceCheckProgrammer {
     context: IEvidenceClaimContext,
     materialized: IEvidenceMaterializedReference,
     position: number,
+    indexes: EvidenceAnalysisIndexes,
   ): Promise<IEvidenceGraphReference> {
     const { inventory: claim, hosts, declarations, reviews } = context;
-    const resolver = new EvidenceTargetResolver(
-      [materialized.inventory],
+    const resolver: EvidenceTargetResolverIndex = indexes.resolver(
+      materialized.inventory,
       materialized.plan.population.type,
     );
     const resolutions: IEvidenceGraphResolution[] = await Promise.all(
@@ -560,7 +597,7 @@ export namespace EvidenceCheckProgrammer {
    * edge back to the authored annotation.
    */
   async function resolveDeclaration(
-    resolver: EvidenceTargetResolver,
+    resolver: EvidenceTargetResolverIndex,
     declaration: IEvidenceInventory["declarations"][number],
     host: IEvidenceHost,
     unitIds: string[],
@@ -579,7 +616,7 @@ export namespace EvidenceCheckProgrammer {
    * an evidence edge or change coverage counts.
    */
   async function resolveReview(
-    resolver: EvidenceTargetResolver,
+    resolver: EvidenceTargetResolverIndex,
     review: IEvidenceInventory["reviews"][number],
     host: IEvidenceHost,
     unitIds: string[],

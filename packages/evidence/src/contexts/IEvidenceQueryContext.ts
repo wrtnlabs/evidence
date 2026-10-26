@@ -4,9 +4,10 @@ import type { EvidenceQueryPopulationContext } from "./EvidenceQueryPopulationCo
 /**
  * Owned query state shared by list, inspect, and graph programmers.
  *
- * The EvidenceQuery facade clones analysis before constructing this context and
- * clones reports before returning them. Population indexes can therefore cache
- * traversal results without depending on caller-owned mutable inventory data.
+ * Public EvidenceQuery facades capture analysis and clone returned reports.
+ * Commands borrow their exclusively owned analysis until rendering completes.
+ * Population indexes can therefore cache traversal results without depending on
+ * caller-owned mutable inventory data.
  *
  * @evidence contracts/common.md#principled-implementation The analysis, cwd and population contexts are shared by list, inspect and graph programmers.
  * @evidence contracts/common.md#clear-and-simple-design Programmers receive this owned state instead of rebuilding indexes.

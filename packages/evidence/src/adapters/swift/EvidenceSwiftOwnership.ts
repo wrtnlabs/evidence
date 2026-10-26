@@ -1,3 +1,4 @@
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
 import type { IEvidenceSwiftDeclaration } from "./IEvidenceSwiftDeclaration";
 import type { IEvidenceSwiftFileAnalysis } from "./IEvidenceSwiftFileAnalysis";
 
@@ -39,20 +40,45 @@ export namespace EvidenceSwiftOwnership {
     const ids = new Map(
       declarations.map((declaration) => [declaration.id, declaration]),
     );
+    const children: Map<string, IEvidenceSwiftDeclaration[]> =
+      groupEvidenceRecords(
+        declarations.filter(
+          (entry: IEvidenceSwiftDeclaration): boolean =>
+            entry.ownerDeclarationId !== undefined,
+        ),
+        (entry: IEvidenceSwiftDeclaration): string =>
+          entry.ownerDeclarationId ?? "",
+      );
+    const files: Map<string, IEvidenceSwiftFileAnalysis[]> =
+      groupEvidenceRecords(
+        analyses,
+        (entry: IEvidenceSwiftFileAnalysis): string =>
+          entry.source.physicalPath,
+      );
+    const order: Map<string, number> = new Map(
+      declarations.map(
+        (entry: IEvidenceSwiftDeclaration, index: number): [string, number] => [
+          entry.id,
+          index,
+        ],
+      ),
+    );
     const pending = new Set(
       declarations.filter((declaration) => declaration.extension),
     );
     let progress = true;
     while (progress && pending.size !== 0) {
       progress = false;
+      const blocked: Set<string> = new Set();
+      for (const extension of pending)
+        for (const child of descendants(extension.id, children, order))
+          blocked.add(child.id);
       const types = new Map<string, IEvidenceSwiftDeclaration[]>();
       for (const declaration of declarations)
         if (
           declaration.symbol === "type" &&
           !declaration.extension &&
-          ![...pending].some((extension) =>
-            descends(declaration, extension.id, ids),
-          )
+          !blocked.has(declaration.id)
         ) {
           const key = JSON.stringify(declaration.identity);
           types.set(key, [...(types.get(key) ?? []), declaration]);
@@ -66,6 +92,19 @@ export namespace EvidenceSwiftOwnership {
         );
         if (target === undefined) continue;
         const old = declaration.address;
+        const nested: IEvidenceSwiftDeclaration[] = descendants(
+          declaration.id,
+          children,
+          order,
+        );
+        if (declaration.ownerDeclarationId !== undefined)
+          children.set(
+            declaration.ownerDeclarationId,
+            (children.get(declaration.ownerDeclarationId) ?? []).filter(
+              (entry: IEvidenceSwiftDeclaration): boolean =>
+                entry !== declaration,
+            ),
+          );
         declaration.address = [...target.address];
         declaration.identity = [...target.identity];
         declaration.name = target.name;
@@ -73,23 +112,28 @@ export namespace EvidenceSwiftOwnership {
         if (target.ownerDeclarationId === undefined)
           delete declaration.ownerDeclarationId;
         else declaration.ownerDeclarationId = target.ownerDeclarationId;
-        for (const child of declarations)
-          if (descends(child, declaration.id, ids)) {
-            child.address = [
-              ...target.address,
-              ...child.address.slice(old.length),
-            ];
-            child.identity = [...child.address];
-          }
+        if (declaration.ownerDeclarationId !== undefined) {
+          const entries: IEvidenceSwiftDeclaration[] =
+            children.get(declaration.ownerDeclarationId) ?? [];
+          entries.push(declaration);
+          children.set(declaration.ownerDeclarationId, entries);
+        }
+        for (const child of nested) {
+          child.address = [
+            ...target.address,
+            ...child.address.slice(old.length),
+          ];
+          child.identity = [...child.address];
+        }
         pending.delete(declaration);
         progress = true;
       }
     }
     for (const declaration of pending) {
       declaration.public = false;
-      const analysis = analyses.find(
-        (entry) => entry.source.physicalPath === declaration.site.file,
-      );
+      const analysis: IEvidenceSwiftFileAnalysis | undefined = files.get(
+        declaration.site.file,
+      )?.[0];
       if (analysis === undefined) continue;
       analysis.complete = false;
       analysis.diagnostics.push({
@@ -104,8 +148,14 @@ export namespace EvidenceSwiftOwnership {
         },
       });
     }
+    const visibility: Map<string, boolean> = new Map();
     for (const declaration of declarations)
-      declaration.public &&= visible(declaration, ids, new Set<string>());
+      declaration.public &&= visible(
+        declaration,
+        ids,
+        new Set<string>(),
+        visibility,
+      );
   }
 
   /**
@@ -156,26 +206,28 @@ export namespace EvidenceSwiftOwnership {
     return undefined;
   }
 
-  /**
-   * Uses explicit declaration parents to distinguish literal names from
-   * containment.
-   *
-   * This preserves names that contain punctuation without interpreting them as
-   * paths.
-   */
-  function descends(
-    declaration: IEvidenceSwiftDeclaration,
-    parentId: string,
-    ids: Map<string, IEvidenceSwiftDeclaration>,
-  ): boolean {
-    let owner = declaration.ownerDeclarationId;
-    const visited = new Set<string>();
-    while (owner !== undefined && !visited.has(owner)) {
-      if (owner === parentId) return true;
-      visited.add(owner);
-      owner = ids.get(owner)?.ownerDeclarationId;
+  /** Visits only explicit descendants and restores original declaration order. */
+  function descendants(
+    id: string,
+    children: Map<string, IEvidenceSwiftDeclaration[]>,
+    order: Map<string, number>,
+  ): IEvidenceSwiftDeclaration[] {
+    const result: IEvidenceSwiftDeclaration[] = [];
+    const seen: Set<string> = new Set([id]);
+    const pending: IEvidenceSwiftDeclaration[] = [...(children.get(id) ?? [])];
+    while (pending.length !== 0) {
+      const child: IEvidenceSwiftDeclaration | undefined = pending.pop();
+      if (child === undefined || seen.has(child.id)) continue;
+      seen.add(child.id);
+      result.push(child);
+      pending.push(...(children.get(child.id) ?? []));
     }
-    return false;
+    return result.sort(
+      (
+        left: IEvidenceSwiftDeclaration,
+        right: IEvidenceSwiftDeclaration,
+      ): number => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0),
+    );
   }
 
   /**
@@ -188,13 +240,19 @@ export namespace EvidenceSwiftOwnership {
     declaration: IEvidenceSwiftDeclaration,
     ids: Map<string, IEvidenceSwiftDeclaration>,
     visited: Set<string>,
+    cache: Map<string, boolean>,
   ): boolean {
+    const remembered: boolean | undefined = cache.get(declaration.id);
+    if (remembered !== undefined) return remembered;
     if (!declaration.public || visited.has(declaration.id)) return false;
     visited.add(declaration.id);
     const owner =
       declaration.ownerDeclarationId === undefined
         ? undefined
         : ids.get(declaration.ownerDeclarationId);
-    return owner === undefined || visible(owner, ids, visited);
+    const result: boolean =
+      owner === undefined || visible(owner, ids, visited, cache);
+    cache.set(declaration.id, result);
+    return result;
   }
 }

@@ -1,6 +1,7 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
@@ -111,7 +112,7 @@ export class EvidenceSwiftAdapter implements IEvidenceAdapter<"swift"> {
         input.root.physical ?? input.root.absolute,
       );
       this.materializeDocumentation(inventory, analyses, published);
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     } finally {
       await parser.close();
     }
@@ -235,8 +236,7 @@ export class EvidenceSwiftAdapter implements IEvidenceAdapter<"swift"> {
               `Swift accessor '${declaration.address.join(".")}' has distinct lexical owners.`,
               "Rename the colliding declaration or implement disambiguated ownership addressing before checking coverage.",
             );
-          if (!unit.sites.some((site) => site.id === declaration.site.id))
-            unit.sites.push(structuredClone(declaration.site));
+          EvidenceUnitSites.append(unit, declaration.site);
         }
 
         for (const sourceAddress of analysis.source.addresses) {

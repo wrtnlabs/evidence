@@ -249,6 +249,11 @@ export class EvidenceMarkdownScanner {
         }
         if (EvidenceMarkdownSyntax.indentedCode(line)) continue;
       }
+      const inline: Array<readonly [number, number]> =
+        EvidenceMarkdownSyntax.inlineSpans(line);
+      let inlineIndex: number = 0;
+      let nextTemplateOpen: number = line.indexOf("={`");
+      let nextTemplateClose: number = line.indexOf("`}");
       let outside: string = "";
       let cursor: number = 0;
       let commentColumn: number | undefined =
@@ -291,8 +296,12 @@ export class EvidenceMarkdownScanner {
               "comment" | "pre-open" | "pre-close" | "other",
             ]
           | undefined = this.markup(line, cursor);
-        const templateOpen: number = line.indexOf("={`", cursor);
-        const templateClose: number = line.indexOf("`}", cursor);
+        if (nextTemplateOpen >= 0 && nextTemplateOpen < cursor)
+          nextTemplateOpen = line.indexOf("={`", cursor);
+        if (nextTemplateClose >= 0 && nextTemplateClose < cursor)
+          nextTemplateClose = line.indexOf("`}", cursor);
+        const templateOpen: number = nextTemplateOpen;
+        const templateClose: number = nextTemplateClose;
         const template:
           | readonly [number, number, "template-open" | "template-close"]
           | undefined =
@@ -338,9 +347,11 @@ export class EvidenceMarkdownScanner {
           ),
         ] = token;
         outside += line.slice(cursor, start);
+        while ((inline[inlineIndex]?.[1] ?? Infinity) <= start) ++inlineIndex;
+        const code: readonly [number, number] | undefined = inline[inlineIndex];
         if (
           kind === "other" ||
-          EvidenceMarkdownSyntax.inlineCode(line, start) ||
+          (code !== undefined && start >= code[0] && start < code[1]) ||
           EvidenceMarkdownSyntax.escaped(line, start)
         ) {
           outside += line.slice(start, end);
@@ -488,13 +499,15 @@ export class EvidenceMarkdownScanner {
    * marker columns continue to map to the original source line.
    */
   private maskedLine(index: number): string {
-    let output: string = this.line(index);
-    const masks: Array<readonly [number, number]> =
-      this.commentMasks[index] ?? [];
-    for (const [start, end] of masks)
-      output =
-        output.slice(0, start) + " ".repeat(end - start) + output.slice(end);
-    return output;
+    const line: string = this.line(index);
+    const fragments: string[] = [];
+    let cursor: number = 0;
+    for (const [start, end] of this.commentMasks[index] ?? []) {
+      fragments.push(line.slice(cursor, start), " ".repeat(end - start));
+      cursor = end;
+    }
+    fragments.push(line.slice(cursor));
+    return fragments.join("");
   }
 
   /**

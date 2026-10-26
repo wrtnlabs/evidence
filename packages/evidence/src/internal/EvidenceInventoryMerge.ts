@@ -1,3 +1,4 @@
+import { EvidenceUnitSites } from "./EvidenceUnitSites";
 import typia from "typia";
 
 import type { IEvidenceHost } from "../structures/IEvidenceHost";
@@ -35,9 +36,9 @@ export namespace EvidenceInventoryMerge {
    * @evidence contracts/common.md#clear-and-simple-design Comparison keys and conflict recording are separate helpers; combine only orchestrates.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Incompatible records add conflicts and mark the output incomplete instead of being dropped, and incompleteness always carries an inventory-incomplete diagnostic.
    * @evidence contracts/common.md#meaningful-documentation The comment explains why input order cannot select a population; the inline comment explains alias-duplicated tags.
-   * @evidence contracts/performance.md#efficient-algorithms Linear in total records with map lookups, except site matching within one unit, which scans that unit's few sites.
-   * @evidenceExclude contracts/performance.md#reuse-equivalent-work Merging runs once per population over its specific inputs.
-   * @evidence contracts/performance.md#bound-retention-and-release-resources Input records are moved into the output rather than copied; the temporary maps are local and discarded.
+   * @evidence contracts/performance.md#efficient-algorithms Linear in total records and first-indexed sites with identity lookups; duplicate site comparison reads only that site's ranges.
+   * @evidence contracts/performance.md#reuse-equivalent-work Identity maps merge each input record once, and exclusively owned site arrays reuse the shared site-ID index; serialized content keys still establish compatibility.
+   * @evidence contracts/performance.md#bound-retention-and-release-resources Input records move into the output; local merge maps are discarded, and weak site-array indexes retain only sites already owned by live construction arrays.
    */
   export function combine(inputs: IEvidenceInventory[]): IEvidenceInventory {
     EvidenceInventorySources.reconcile(inputs);
@@ -90,13 +91,12 @@ export namespace EvidenceInventoryMerge {
           )
             previous.contentDigest = unit.contentDigest;
           for (const site of unit.sites) {
-            const existing = previous.sites.find(
-              (candidate) => candidate.id === site.id,
-            );
-            if (existing === undefined) previous.sites.push(site);
-            else if (
-              siteKey(existing) !== siteKey(site) ||
-              contentKey(existing) !== contentKey(site)
+            const existing: IEvidenceUnitSite | undefined =
+              EvidenceUnitSites.append(previous, site, false);
+            if (
+              existing !== undefined &&
+              (siteKey(existing) !== siteKey(site) ||
+                contentKey(existing) !== contentKey(site))
             )
               conflict(output, "declaration site", site.id);
           }

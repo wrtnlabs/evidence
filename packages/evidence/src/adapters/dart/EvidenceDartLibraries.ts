@@ -1,3 +1,5 @@
+import type { IEvidenceSourceDependency } from "../../structures/IEvidenceSourceDependency";
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
 import path from "node:path";
 
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
@@ -49,6 +51,27 @@ export namespace EvidenceDartLibraries {
         ...analysis.source.addresses.map((address) => address.absolute),
       ])
         files.set(normalize(name), analysis);
+    const named: Map<string, IEvidenceDartFileAnalysis[]> =
+      groupEvidenceRecords(
+        analyses.filter(
+          (entry: IEvidenceDartFileAnalysis): boolean =>
+            !entry.directives.some(
+              (directive: IEvidenceDartDirective): boolean =>
+                directive.kind === "part-of",
+            ),
+        ),
+        (entry: IEvidenceDartFileAnalysis): string => entry.libraryName ?? "",
+      );
+    const physical: Map<string, IEvidenceDartFileAnalysis[]> =
+      groupEvidenceRecords(
+        analyses,
+        (entry: IEvidenceDartFileAnalysis): string => entry.source.physicalPath,
+      );
+    const dependencies: Set<string> = new Set(
+      inventory.dependencies
+        .filter((entry: IEvidenceSourceDependency): boolean => !entry.recursive)
+        .map((entry: IEvidenceSourceDependency): string => entry.path),
+    );
     for (const analysis of analyses)
       for (const directive of analysis.directives) {
         // Package and SDK exports forward foreign owners. Parts still require
@@ -59,11 +82,8 @@ export namespace EvidenceDartLibraries {
         )
           continue;
         if (directive.named) {
-          const matches = analyses.filter(
-            (candidate) =>
-              candidate.libraryName === directive.target &&
-              !candidate.directives.some((item) => item.kind === "part-of"),
-          );
+          const matches: IEvidenceDartFileAnalysis[] =
+            named.get(directive.target) ?? [];
           if (matches.length === 1 && matches[0] !== undefined)
             directive.resolved = matches[0].source.physicalPath;
           else
@@ -99,13 +119,10 @@ export namespace EvidenceDartLibraries {
           ),
         ];
         for (const location of locations)
-          if (
-            !inventory.dependencies.some(
-              (dependency) =>
-                dependency.path === location && !dependency.recursive,
-            )
-          )
+          if (!dependencies.has(location)) {
+            dependencies.add(location);
             inventory.dependencies.push({ path: location, recursive: false });
+          }
         const matches = [
           ...new Set(
             locations.flatMap((location) => {
@@ -129,9 +146,9 @@ export namespace EvidenceDartLibraries {
         (directive) => directive.kind === "part-of",
       );
       if (owners.length === 0) continue;
-      const owner = analyses.find(
-        (candidate) => candidate.source.physicalPath === owners[0]?.resolved,
-      );
+      const owner: IEvidenceDartFileAnalysis | undefined = physical.get(
+        owners[0]?.resolved ?? "",
+      )?.[0];
       if (
         owners.length !== 1 ||
         owner === undefined ||
@@ -163,9 +180,9 @@ export namespace EvidenceDartLibraries {
     }
     for (const analysis of analyses)
       for (const directive of analysis.directives) {
-        const target = analyses.find(
-          (candidate) => candidate.source.physicalPath === directive.resolved,
-        );
+        const target: IEvidenceDartFileAnalysis | undefined = physical.get(
+          directive.resolved ?? "",
+        )?.[0];
         if (target === undefined) continue;
         if (
           directive.kind === "part" &&
@@ -234,6 +251,11 @@ export namespace EvidenceDartLibraries {
     inventory: IEvidenceInventory,
     published: Map<string, string>,
   ): void {
+    const physical: Map<string, IEvidenceDartFileAnalysis[]> =
+      groupEvidenceRecords(
+        analyses,
+        (entry: IEvidenceDartFileAnalysis): string => entry.source.physicalPath,
+      );
     const surfaces = new Map<string, Set<string>>();
     const localNames = new Map<string, Set<string>>();
     for (const analysis of analyses) {
@@ -255,9 +277,9 @@ export namespace EvidenceDartLibraries {
         for (const directive of analysis.directives.filter(
           (item) => item.kind === "export",
         )) {
-          const target = analyses.find(
-            (candidate) => candidate.source.physicalPath === directive.resolved,
-          );
+          const target: IEvidenceDartFileAnalysis | undefined = physical.get(
+            directive.resolved ?? "",
+          )?.[0];
           const destination = surfaces.get(analysis.library);
           if (target === undefined || destination === undefined) continue;
           for (const id of surfaces.get(target.library) ?? []) {

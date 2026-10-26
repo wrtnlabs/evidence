@@ -1,3 +1,8 @@
+import type { IEvidenceGraphHostCoverage } from "../structures/IEvidenceGraphHostCoverage";
+import { EvidenceAnalysisIndexes } from "../internal/EvidenceAnalysisIndexes";
+import type { EvidenceTargetResolverIndex } from "../internal/EvidenceTargetResolverIndex";
+import type { EvidenceFingerprintIndex } from "../internal/EvidenceFingerprintIndex";
+import { EvidenceQueryInventoryIndex } from "../internal/EvidenceQueryInventoryIndex";
 import type { IEvidenceQueryPopulation } from "../internal/IEvidenceQueryPopulation";
 import type { IEvidencePublicAddress } from "../structures/IEvidencePublicAddress";
 import type { IEvidenceUnit } from "../structures/IEvidenceUnit";
@@ -99,15 +104,59 @@ export class EvidenceQueryPopulationContext {
    * Formatting later sorts and deduplicates target spellings for each query
    * row.
    */
-  public readonly addresses = new Map<string, IEvidencePublicAddress[]>();
+  public readonly addresses: Map<string, IEvidencePublicAddress[]>;
+
+  /** Inventory-wide relations shared with other wrappers over the same view. */
+  public readonly records: EvidenceQueryInventoryIndex;
+
+  /** Address resolver shared for this immutable inventory and artifact grammar. */
+  public get resolver(): EvidenceTargetResolverIndex {
+    return this.indexes.resolver(this.inventory, this.scope.type);
+  }
+
+  /** Fingerprints shared for this immutable inventory. */
+  public get fingerprints(): EvidenceFingerprintIndex {
+    return this.indexes.fingerprint(this.inventory);
+  }
+
+  /** Configured exact target spellings, built once per captured cwd. */
+  public readonly exactTargets: Map<string, Set<string>> = new Map();
+
+  /** Session owner for lazily requested derived indexes. */
+  private readonly indexes: EvidenceAnalysisIndexes;
 
   /**
-   * Cached selected-descendant lists keyed by queried ancestor identity.
-   *
-   * The immutable snapshot boundary lets repeated coverage queries reuse
-   * traversal results.
+   * Selected-descendant results retained per queried ancestor in this immutable
+   * context.
    */
   private readonly descendants = new Map<string, string[]>();
+
+  /** Direct obligation coverage, indexed once for constant-time membership. */
+  public readonly covered: Set<string>;
+
+  /** Direct obligation missing identities. */
+  public readonly missing: Set<string>;
+
+  /** Ancestors having a missing selected identity, including that identity. */
+  public readonly subtreeMissing: Set<string> = new Set();
+
+  /** Ancestors whose nonempty selected subtree is entirely covered. */
+  public readonly subtreeCovered: Set<string> = new Set();
+
+  /** Host answer ledgers indexed only if focused diagnostics request them. */
+  private coverageIndex: Map<string, IEvidenceGraphHostCoverage> | undefined;
+
+  /** Borrows obligation-local ledgers without rebuilding them per diagnostic. */
+  public get hostCoverage(): ReadonlyMap<string, IEvidenceGraphHostCoverage> {
+    this.coverageIndex ??= new Map(
+      (this.obligation?.hostCoverage ?? []).map(
+        (
+          host: IEvidenceGraphHostCoverage,
+        ): [string, IEvidenceGraphHostCoverage] => [host.hostUnitId, host],
+      ),
+    );
+    return this.coverageIndex;
+  }
 
   /**
    * Builds selection, visibility, and address indexes over an owned analysis
@@ -117,20 +166,40 @@ export class EvidenceQueryPopulationContext {
    * supplies isolated data. Parent walks stop at cycles or missing units so
    * inspection cannot loop.
    */
-  public constructor(population: IEvidenceQueryPopulation) {
+  public constructor(
+    population: IEvidenceQueryPopulation,
+    records: EvidenceQueryInventoryIndex = EvidenceQueryInventoryIndex.borrow(
+      population.inventory,
+    ),
+    indexes: EvidenceAnalysisIndexes = new EvidenceAnalysisIndexes(),
+  ) {
     this.scope = population.scope;
     this.inventory = population.inventory;
     this.unitIds = population.unitIds;
     this.reference = population.reference;
     this.obligation = population.obligation;
-    this.units = new Map(this.inventory.units.map((unit) => [unit.id, unit]));
+    this.records = records;
+    this.indexes = indexes;
+    this.units = records.units;
+    this.addresses = records.addresses;
     this.selected = new Set(this.unitIds);
+    this.covered = new Set(this.obligation?.coveredUnitIds ?? []);
+    this.missing = new Set(this.obligation?.missingUnitIds ?? []);
+    const counts: Map<string, number> = new Map();
+    const coveredCounts: Map<string, number> = new Map();
 
     for (const id of this.unitIds) {
       let current = this.units.get(id);
       const visited = new Set<string>();
       while (current !== undefined && !visited.has(current.id)) {
         this.configured.add(current.id);
+        counts.set(current.id, (counts.get(current.id) ?? 0) + 1);
+        if (this.covered.has(id))
+          coveredCounts.set(
+            current.id,
+            (coveredCounts.get(current.id) ?? 0) + 1,
+          );
+        if (this.missing.has(id)) this.subtreeMissing.add(current.id);
         visited.add(current.id);
         current =
           current.parentId === undefined
@@ -138,6 +207,9 @@ export class EvidenceQueryPopulationContext {
             : this.units.get(current.parentId);
       }
     }
+    for (const [id, count] of counts)
+      if (count !== 0 && coveredCounts.get(id) === count)
+        this.subtreeCovered.add(id);
     // Preserve structural closure before applying withdrawal. Exact inspection
     // still needs to recognize a configured target and explain why it is hidden.
     for (const id of this.configured) {
@@ -157,11 +229,6 @@ export class EvidenceQueryPopulationContext {
       }
       if (!withdrawn) this.visible.add(id);
     }
-    for (const address of this.inventory.addresses) {
-      const entries = this.addresses.get(address.unitId) ?? [];
-      entries.push(address);
-      this.addresses.set(address.unitId, entries);
-    }
   }
 
   /**
@@ -172,19 +239,28 @@ export class EvidenceQueryPopulationContext {
    * readonly view because mutating it would corrupt subsequent coverage
    * summaries.
    *
-   * @evidence contracts/common.md#principled-implementation Filtering the configured selection by descends preserves configured order and includes the ancestor itself when selected.
+   * @evidence contracts/common.md#principled-implementation Traversing explicit child ownership with a cycle guard and filtering configured IDs preserves selection order and includes the selected ancestor itself.
    * @evidence contracts/common.md#clear-and-simple-design The method uses descends and caches its result.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Callers receive a readonly view so cached results cannot be corrupted.
    * @evidence contracts/common.md#meaningful-documentation The comment explains ordering, caching and the readonly result.
-   * @evidence contracts/performance.md#efficient-algorithms First call per ancestor is O(n x d) for n selected units and parent depth d; repeats are constant time.
+   * @evidence contracts/performance.md#efficient-algorithms First call visits the actual structural subtree and filters selected IDs in configured order; repeats are constant time.
    * @evidence contracts/performance.md#reuse-equivalent-work Results are memoized per ancestor because the snapshot is immutable.
    * @evidence contracts/performance.md#bound-retention-and-release-resources The cache grows by at most one list per queried ancestor and lives as long as the context.
    */
   public selectedDescendants(ancestorId: string): readonly string[] {
     const remembered = this.descendants.get(ancestorId);
     if (remembered !== undefined) return remembered;
-    const descendants = this.unitIds.filter((unitId) =>
-      this.descends(unitId, ancestorId),
+    const reached: Set<string> = new Set();
+    const pending: string[] = [ancestorId];
+    while (pending.length !== 0) {
+      const id: string | undefined = pending.pop();
+      if (id === undefined || reached.has(id) || !this.units.has(id)) continue;
+      reached.add(id);
+      for (const child of this.records.children.get(id) ?? [])
+        pending.push(child.id);
+    }
+    const descendants: string[] = this.unitIds.filter((id: string): boolean =>
+      reached.has(id),
     );
     this.descendants.set(ancestorId, descendants);
     return descendants;

@@ -45,6 +45,35 @@ export namespace EvidenceMatlabOwnership {
         analysis,
       ]),
     );
+    const owners: Map<string, IEvidenceMatlabDeclaration> = new Map();
+    const methods: Map<string, IEvidenceMatlabDeclaration> = new Map();
+    const implementations: Map<string, IEvidenceMatlabDeclaration> = new Map();
+    for (const analysis of analyses)
+      for (const declaration of analysis.declarations) {
+        if (
+          declaration.symbol === "type" &&
+          declaration.ownerDeclarationId === undefined &&
+          !owners.has(analysis.source.physicalPath.replaceAll("\\", "/"))
+        )
+          owners.set(
+            analysis.source.physicalPath.replaceAll("\\", "/"),
+            declaration,
+          );
+        if (declaration.symbol === "function") {
+          const key: string = JSON.stringify([
+            analysis.source.physicalPath,
+            declaration.ownerDeclarationId,
+            declaration.name,
+          ]);
+          if (!methods.has(key)) methods.set(key, declaration);
+        }
+        const key: string = JSON.stringify([
+          analysis.source.physicalPath,
+          declaration.externalOwner,
+          declaration.name,
+        ]);
+        if (!implementations.has(key)) implementations.set(key, declaration);
+      }
     for (const analysis of analyses) {
       const directory = posix.dirname(
         analysis.source.physicalPath.replaceAll("\\", "/"),
@@ -58,14 +87,9 @@ export namespace EvidenceMatlabOwnership {
           recursive: false,
         });
         const ownerAnalysis = files.get(declaration.externalOwner);
-        const owner =
-          ownerAnalysis === undefined
-            ? undefined
-            : ownerAnalysis.declarations.find(
-                (candidate) =>
-                  candidate.symbol === "type" &&
-                  candidate.ownerDeclarationId === undefined,
-              );
+        const owner: IEvidenceMatlabDeclaration | undefined = owners.get(
+          declaration.externalOwner,
+        );
         if (owner === undefined || ownerAnalysis === undefined) {
           problem(
             analysis,
@@ -76,11 +100,12 @@ export namespace EvidenceMatlabOwnership {
           declaration.public = false;
           continue;
         }
-        const prototype = ownerAnalysis.declarations.find(
-          (candidate) =>
-            candidate.ownerDeclarationId === owner.id &&
-            candidate.name === declaration.name &&
-            candidate.symbol === "function",
+        const prototype: IEvidenceMatlabDeclaration | undefined = methods.get(
+          JSON.stringify([
+            ownerAnalysis.source.physicalPath,
+            owner.id,
+            declaration.name,
+          ]),
         );
         if (prototype !== undefined && prototype.implementation === undefined)
           problem(
@@ -109,13 +134,15 @@ export namespace EvidenceMatlabOwnership {
           recursive: false,
         });
         const externalAnalysis = files.get(declaration.implementation);
-        const external =
+        const external: IEvidenceMatlabDeclaration | undefined =
           externalAnalysis === undefined
             ? undefined
-            : externalAnalysis.declarations.find(
-                (candidate) =>
-                  candidate.externalOwner === declaration.anchor &&
-                  candidate.name === declaration.name,
+            : implementations.get(
+                JSON.stringify([
+                  externalAnalysis.source.physicalPath,
+                  declaration.anchor,
+                  declaration.name,
+                ]),
               );
         if (external === undefined)
           problem(
@@ -126,19 +153,30 @@ export namespace EvidenceMatlabOwnership {
           );
       }
     }
+    const properties: Map<string, IEvidenceMatlabDeclaration> = new Map();
+    for (const analysis of analyses)
+      for (const declaration of analysis.declarations)
+        if (
+          declaration.accessor === undefined &&
+          declaration.getPublic !== undefined
+        ) {
+          const key: string = JSON.stringify([
+            declaration.anchor,
+            declaration.ownerDeclarationId,
+            declaration.name,
+          ]);
+          if (!properties.has(key)) properties.set(key, declaration);
+        }
     for (const analysis of analyses)
       for (const declaration of analysis.declarations) {
         if (declaration.accessor === undefined) continue;
-        const property = analyses
-          .flatMap((item) => item.declarations)
-          .find(
-            (candidate) =>
-              candidate.accessor === undefined &&
-              candidate.getPublic !== undefined &&
-              candidate.anchor === declaration.anchor &&
-              candidate.ownerDeclarationId === declaration.ownerDeclarationId &&
-              candidate.name === declaration.name,
-          );
+        const property: IEvidenceMatlabDeclaration | undefined = properties.get(
+          JSON.stringify([
+            declaration.anchor,
+            declaration.ownerDeclarationId,
+            declaration.name,
+          ]),
+        );
         if (property === undefined) {
           problem(
             analysis,

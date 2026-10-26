@@ -1,6 +1,7 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
@@ -104,7 +105,7 @@ export class EvidenceDartAdapter implements IEvidenceAdapter<"dart"> {
       const published = this.materializeUnits(inventory, analyses);
       EvidenceDartLibraries.publish(analyses, inventory, published);
       this.materializeDocumentation(inventory, analyses, published);
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     } finally {
       await parser.close();
     }
@@ -198,8 +199,7 @@ export class EvidenceDartAdapter implements IEvidenceAdapter<"dart"> {
             ...(parentId === undefined ? {} : { parentId }),
           };
           units.set(id, unit);
-        } else if (!unit.sites.some((site) => site.id === declaration.site.id))
-          unit.sites.push(structuredClone(declaration.site));
+        } else EvidenceUnitSites.append(unit, declaration.site);
 
         for (const sourceAddress of analysis.source.addresses) {
           const address: IEvidencePublicAddress = {

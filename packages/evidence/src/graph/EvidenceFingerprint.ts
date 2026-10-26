@@ -1,4 +1,5 @@
-import { EvidenceInventory } from "./EvidenceInventory";
+import typia from "typia";
+import { EvidenceInventoryIndex } from "../internal/EvidenceInventoryIndex";
 import { EvidenceFingerprintIndex } from "../internal/EvidenceFingerprintIndex";
 import type { IEvidenceFingerprint } from "../structures/IEvidenceFingerprint";
 import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
@@ -37,7 +38,7 @@ export namespace EvidenceFingerprint {
    *   );
    *   // Persist fingerprint.value with a review of this semantic unit.
    *
-   * @evidence contracts/common.md#principled-implementation The inventory is reconciled through EvidenceInventory with the same file scopes target resolution uses, completeness is required, and a fresh index computes the unit's digest and scope fingerprint.
+   * @evidence contracts/common.md#principled-implementation The inventory is reconciled through a shape assertion and the internal inventory index with the same file scopes target resolution uses, completeness is required, and a fresh index computes the unit's digest and scope fingerprint.
    * @evidence contracts/common.md#clear-and-simple-design Reconciliation and hashing are delegated.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts An incomplete inventory throws because a missing unit would make the fingerprint untrustworthy.
    * @evidence contracts/common.md#meaningful-documentation The comment explains scope, rejection and gives an example.
@@ -49,9 +50,12 @@ export namespace EvidenceFingerprint {
     inventory: IEvidenceInventory,
     unitId: string,
   ): IEvidenceFingerprint {
-    const snapshot = new EvidenceInventory([inventory], {
-      fileScopes: true,
-    }).snapshot();
+    const snapshot: IEvidenceInventory = new EvidenceInventoryIndex(
+      typia.assert([inventory]),
+      {
+        fileScopes: true,
+      },
+    ).snapshot();
     if (!snapshot.complete)
       throw new Error("Cannot fingerprint an incomplete evidence inventory.");
     return new EvidenceFingerprintIndex(snapshot).inspect(unitId);

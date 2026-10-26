@@ -1,7 +1,8 @@
 import path from "node:path";
 
 import { EvidenceMarkdownTarget } from "../adapters/markdown/EvidenceMarkdownTarget";
-import { EvidenceTargetResolver } from "../targets/EvidenceTargetResolver";
+import { EvidenceAnalysisIndexes } from "./EvidenceAnalysisIndexes";
+import type { EvidenceTargetResolverIndex } from "./EvidenceTargetResolverIndex";
 import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
 import type { IEvidenceClaim } from "../structures/IEvidenceClaim";
 import type { IEvidenceDetachedHostBinding } from "../structures/IEvidenceDetachedHostBinding";
@@ -55,7 +56,10 @@ export namespace EvidenceDetachedEvidence {
     selectedIds: string[],
     detached: IEvidenceInventory,
   ): Promise<IEvidenceDetachedSelection> {
-    const inventory: IEvidenceInventory = structuredClone(detached);
+    const inventory: IEvidenceInventory = {
+      ...detached,
+      diagnostics: [...detached.diagnostics],
+    };
     const bindings: IEvidenceDetachedHostBinding[] = [];
     const owners: IEvidenceDetachedOwner[] = [];
     const units: Map<string, IEvidenceUnit> = new Map<string, IEvidenceUnit>(
@@ -73,10 +77,8 @@ export namespace EvidenceDetachedEvidence {
     const ownerIds: Map<string, string> = new Map<string, string>();
     const boundHosts: Set<string> = new Set<string>();
     const selected: Set<string> = new Set<string>(selectedIds);
-    const resolver: EvidenceTargetResolver = new EvidenceTargetResolver(
-      [source],
-      claim.type,
-    );
+    const resolver: EvidenceTargetResolverIndex =
+      new EvidenceAnalysisIndexes().resolver(source, claim.type);
     if (inventory.sources.length === 0 && inventory.complete) {
       problem(
         inventory,

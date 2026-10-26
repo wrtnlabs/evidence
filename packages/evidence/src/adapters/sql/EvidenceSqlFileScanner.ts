@@ -1,3 +1,6 @@
+import type { IEvidenceSqlDocumentationAttachment } from "./IEvidenceSqlDocumentationAttachment";
+import { lowerEvidenceOffset } from "../../internal/lowerEvidenceOffset";
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 import type { EvidenceParseSession } from "../../parsers/EvidenceParseSession";
 import { EvidenceSourceText } from "../../internal/EvidenceSourceText";
@@ -362,19 +365,23 @@ export class EvidenceSqlFileScanner {
           attachments: [],
         });
     }
+    const byStart: Map<string, IEvidenceSqlDeclaration[]> =
+      groupEvidenceRecords(
+        this.output.declarations,
+        (entry: IEvidenceSqlDeclaration): string =>
+          String(entry.site.range.start.offset),
+      );
+    const offsets: number[] = Array.from(byStart.keys(), Number).sort(
+      (left: number, right: number): number => left - right,
+    );
     for (const documentation of groups) {
       const start = documentation.range.start.offset;
       // Trailing comments never document the next table or column.
       if (this.standalone(start)) {
-        const next = this.output.declarations
-          .filter(
-            (entry) =>
-              entry.site.range.start.offset >= documentation.range.end.offset,
-          )
-          .sort(
-            (left, right) =>
-              left.site.range.start.offset - right.site.range.start.offset,
-          )[0];
+        const offset: number | undefined =
+          offsets[lowerEvidenceOffset(offsets, documentation.range.end.offset)];
+        const next: IEvidenceSqlDeclaration | undefined =
+          offset === undefined ? undefined : byStart.get(String(offset))?.[0];
         if (
           next !== undefined &&
           /^[ \t]*(?:\r?\n[ \t]*)?$/u.test(
@@ -384,15 +391,16 @@ export class EvidenceSqlFileScanner {
             ),
           )
         )
-          documentation.attachments = this.output.declarations
-            .filter(
-              (entry) =>
-                entry.site.range.start.offset === next.site.range.start.offset,
-            )
-            .map((entry) => ({
+          documentation.attachments = (
+            byStart.get(String(next.site.range.start.offset)) ?? []
+          ).map(
+            (
+              entry: IEvidenceSqlDeclaration,
+            ): IEvidenceSqlDocumentationAttachment => ({
               declarationId: entry.id,
               siteId: entry.site.id,
-            }));
+            }),
+          );
       }
       this.output.documentation.push(documentation);
     }

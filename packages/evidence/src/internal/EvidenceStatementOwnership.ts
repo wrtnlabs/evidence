@@ -52,7 +52,7 @@ export namespace EvidenceStatementOwnership {
    * @evidence contracts/common.md#clear-and-simple-design Release mutates contexts and graph claims in place; measuring and ranking are separate helpers.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Only strictly outranked annotations are withdrawn; nothing is withdrawn to make a check pass.
    * @evidence contracts/common.md#meaningful-documentation The comment states the in-place mutation and positional indexing.
-   * @evidence contracts/performance.md#efficient-algorithms Measuring is linear in each claim's statements and resolutions; comparison is O(C x K) for C claims and K annotation keys, with constant-time map lookups.
+   * @evidence contracts/performance.md#efficient-algorithms Measuring is linear in each claim's statements and resolutions; comparison is linear in the measured annotation occurrences, with three severity eligibility levels per authored key.
    * @evidence contracts/performance.md#reuse-equivalent-work Standings are computed once per claim and reused for every comparison.
    * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources Standing maps and lost-key sets are local to the call; no state is retained.
    */
@@ -62,6 +62,15 @@ export namespace EvidenceStatementOwnership {
   ): void {
     const standings: Map<string, IEvidenceStatementStanding>[] =
       claims.map(measure);
+    const eligible: Map<string, number[]> = new Map();
+    for (const standing of standings)
+      for (const [key, value] of standing) {
+        const levels: number[] = eligible.get(key) ?? [0, 0, 0];
+        for (let severity: number = 0; severity <= 2; ++severity)
+          if (value.resolved || value.severity >= severity)
+            levels[severity] = Math.max(levels[severity] ?? 0, value.level);
+        eligible.set(key, levels);
+      }
     claims.forEach((claim: IEvidenceGraphClaim, index: number): void => {
       const context: IEvidenceClaimContext | undefined = contexts[index];
       if (context === undefined)
@@ -72,22 +81,7 @@ export namespace EvidenceStatementOwnership {
         throw new Error(`Graph claim ${index} has no ownership standings.`);
       const lost: Set<string> = new Set<string>();
       for (const [key, standing] of own)
-        if (
-          standings.some(
-            (
-              other: Map<string, IEvidenceStatementStanding>,
-              position: number,
-            ): boolean => {
-              const rival: IEvidenceStatementStanding | undefined =
-                other.get(key);
-              return (
-                position !== index &&
-                rival !== undefined &&
-                outranks(rival, standing)
-              );
-            },
-          )
-        )
+        if ((eligible.get(key)?.[standing.severity] ?? 0) > standing.level)
           lost.add(key);
       if (lost.size === 0) return;
 
@@ -181,25 +175,6 @@ export namespace EvidenceStatementOwnership {
       (next.level === current.level && next.severity > current.severity)
     )
       output.set(key, next);
-  }
-
-  /**
-   * Tests whether one claim's standing takes an annotation from another claim.
-   *
-   * A strictly higher level is required. A clean resolution takes the
-   * annotation at any severity because it reports nothing to hide. A failing
-   * outcome takes it only when it reports at least the severity the other claim
-   * would, otherwise a warning-level reference could turn an error into a
-   * warning.
-   */
-  function outranks(
-    rival: IEvidenceStatementStanding,
-    own: IEvidenceStatementStanding,
-  ): boolean {
-    return (
-      rival.level > own.level &&
-      (rival.resolved || rival.severity >= own.severity)
-    );
   }
 
   /** Maps a resolution status to its ownership level. */

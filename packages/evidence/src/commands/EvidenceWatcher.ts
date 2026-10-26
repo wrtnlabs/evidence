@@ -1,3 +1,6 @@
+import { EvidenceSourceObservationScope } from "../internal/EvidenceSourceObservationScope";
+import { EvidenceQueryProgrammer } from "../programmers/EvidenceQueryProgrammer";
+import { EvidenceUnitCheckProgrammer } from "../programmers/EvidenceUnitCheckProgrammer";
 import path from "node:path";
 import typia from "typia";
 
@@ -18,7 +21,6 @@ import type { IEvidenceWatchOptions } from "../structures/IEvidenceWatchOptions"
 import type { EvidenceWatchPublisher } from "../typings/EvidenceWatchPublisher";
 import { EvidenceChecker } from "../EvidenceChecker";
 import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
-import { EvidenceQuery } from "../graph/EvidenceQuery";
 
 /**
  * Rechecks active dependencies and publishes stable results in sequence.
@@ -353,15 +355,23 @@ export class EvidenceWatcher {
         this.digests,
       );
 
+      const observations: EvidenceSourceObservationScope =
+        new EvidenceSourceObservationScope(candidates, this.digests);
       let analysis: IEvidenceCheckAnalysis | undefined;
       let analysisCause: unknown;
       try {
         if (beforeConfig.configFile === undefined) throw beforeConfig.cause;
-        analysis = await EvidenceChecker.analyze(beforeConfig.configFile);
+        const configFile: string = beforeConfig.configFile;
+        analysis = await observations.run((): Promise<IEvidenceCheckAnalysis> =>
+          EvidenceChecker.analyze(configFile),
+        );
         if (this.only !== undefined)
-          analysis.report = await EvidenceQuery.check(
-            analysis,
-            this.cwd,
+          analysis.report = await EvidenceUnitCheckProgrammer.check(
+            {
+              analysis,
+              cwd: this.cwd,
+              populations: EvidenceQueryProgrammer.populations(analysis),
+            },
             this.only,
             this.shallow,
           );
@@ -400,16 +410,30 @@ export class EvidenceWatcher {
           analysis.report.diagnostics.some((diagnostic) =>
             /(?:^|-)asset-(?:download|cache|corrupt)$/u.test(diagnostic.code),
           ));
-      if (!EvidenceWatchDependencySet.contains(candidates, active)) {
+      // Configuration discovery still needs a pre-evaluation baseline. Source
+      // growth can instead use versions witnessed before each acquisition.
+      if (
+        !EvidenceWatchDependencySet.contains(
+          candidates,
+          afterConfig.dependencies,
+        ) &&
+        !retryParser
+      ) {
         this.active = active;
-        // A preparation failure already proves this cycle incomplete. Publish it
-        // before retrying, while still recording every newly discovered dependency.
-        if (!retryParser) continue;
+        continue;
       }
       const after = await EvidenceWatchDependencySnapshot.capture(
         EvidenceWatchDependencySet.merge(candidates, active),
         this.digests,
       );
+      if (
+        !EvidenceWatchDependencySet.contains(candidates, active) &&
+        !retryParser &&
+        !(await observations.validates(active, after))
+      ) {
+        this.active = active;
+        continue;
+      }
       // Compare the same pre-analysis boundary. A report built across two source
       // versions must be retried rather than published as a stable cycle.
       if (

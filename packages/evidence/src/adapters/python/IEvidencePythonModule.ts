@@ -41,6 +41,15 @@ export interface IEvidencePythonModule {
    */
   bindings: IEvidencePythonBinding[];
 
+  /** Explicit local bindings by name, in source order. */
+  locals: Map<string, IEvidencePythonBinding[]>;
+
+  /** Ordered star bindings retained for last-winner semantics. */
+  stars: IEvidencePythonBinding[];
+
+  /** Owned unit projections grouped by each supported root. */
+  roots: Map<string, IEvidencePythonOwnedUnit[]>;
+
   /**
    * Scanned declaration roots that may be published through a reachable
    * binding.
