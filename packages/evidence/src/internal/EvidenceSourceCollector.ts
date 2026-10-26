@@ -1,13 +1,8 @@
-import { createHash } from "node:crypto";
+import { EvidenceSourceAcquisition } from "./EvidenceSourceAcquisition";
+import { EvidenceSourceObservationScope } from "./EvidenceSourceObservationScope";
+import type { IEvidenceCapturedSource } from "./IEvidenceCapturedSource";
 import type { BigIntStats } from "node:fs";
-import {
-  lstat,
-  open,
-  readdir,
-  readlink,
-  realpath,
-  stat,
-} from "node:fs/promises";
+import { lstat, readlink, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { IEvidenceSourceAddress } from "../structures/IEvidenceSourceAddress";
@@ -36,6 +31,9 @@ import { EvidenceSourcePath } from "./EvidenceSourcePath";
  * @evidence contracts/performance.md#bound-retention-and-release-resources File handles are closed in finally; the collector retains captured content only until its snapshot is handed to the adapter.
  */
 export class EvidenceSourceCollector {
+  /** Captured bytes/listings shared only with this materialization. */
+  private readonly acquisition: EvidenceSourceAcquisition =
+    EvidenceSourceAcquisition.current() ?? new EvidenceSourceAcquisition();
   private readonly directory: string;
   private readonly root: IEvidenceSourceRoot;
   private readonly files = new Map<string, IEvidenceSourceFile>();
@@ -77,14 +75,14 @@ export class EvidenceSourceCollector {
    * @evidence contracts/performance.md#bound-retention-and-release-resources Every opened file is closed by read; results stay in the collector until snapshot.
    */
   public async scan(globs: EvidenceFileGlob): Promise<void> {
-    this.watch(this.root.absolute, true);
+    await this.watch(this.root.absolute, true);
     try {
       const physical = await this.resolvePhysical(this.root.absolute);
       const info = await stat(physical, { bigint: true });
       if (!info.isDirectory())
         throw new Error("The population root is not a directory.");
       this.root.physical = physical;
-      this.watch(physical, true);
+      await this.watch(physical, true);
       await this.walk(this.root.absolute, "", physical, info, globs, new Set());
     } catch (cause) {
       this.report("root-unreadable", this.root.absolute, cause);
@@ -112,8 +110,8 @@ export class EvidenceSourceCollector {
         "The filesystem source loader accepts local files; remote documents require their adapter.",
       );
     const absolute = EvidenceSourcePath.resolve(this.root.absolute, file);
-    this.watch(absolute, false);
-    this.watch(EvidenceSourcePath.slash(path.dirname(absolute)), false);
+    await this.watch(absolute, false);
+    await this.watch(EvidenceSourcePath.slash(path.dirname(absolute)), false);
     try {
       const rootPhysical: string = await this.resolvePhysical(
         this.root.absolute,
@@ -125,7 +123,7 @@ export class EvidenceSourceCollector {
           "The population root is not a directory.",
         );
       this.root.physical = rootPhysical;
-      this.watch(rootPhysical, true);
+      await this.watch(rootPhysical, true);
       const physical = await this.resolvePhysical(absolute);
       const info = await stat(physical, { bigint: true });
       if (!info.isFile())
@@ -206,11 +204,13 @@ export class EvidenceSourceCollector {
         "symlink-cycle",
         "A directory link returns to an ancestor; remove the cycle or exclude this subtree.",
       );
-    this.watch(absolute, true);
-    this.watch(physical, true);
+    await this.watch(absolute, true);
+    await this.watch(physical, true);
     const next = new Set(ancestors);
     next.add(id);
-    const entries = (await readdir(physical)).sort(compare);
+    const entries: string[] = (await this.acquisition.directory(physical)).sort(
+      compare,
+    );
     for (const name of entries) {
       const location = relative === "" ? name : relative + "/" + name;
       const selected = globs.matches(location);
@@ -218,8 +218,8 @@ export class EvidenceSourceCollector {
       if (!selected && !descend) continue;
       const filename = EvidenceSourcePath.slash(path.join(absolute, name));
       const target = EvidenceSourcePath.slash(path.join(physical, name));
-      this.watch(filename, false);
-      this.watch(target, false);
+      await this.watch(filename, false);
+      await this.watch(target, false);
       try {
         // readdir supplies exact names under an already resolved parent.
         const entry = await lstat(target, { bigint: true });
@@ -267,8 +267,8 @@ export class EvidenceSourceCollector {
     physical: string,
     info: BigIntStats,
   ): Promise<void> {
-    this.watch(absolute, false);
-    this.watch(physical, false);
+    await this.watch(absolute, false);
+    await this.watch(physical, false);
     const address: IEvidenceSourceAddress = {
       absolute,
       relative,
@@ -285,54 +285,27 @@ export class EvidenceSourceCollector {
       existing.addresses.push(address);
       return;
     }
-    const handle = await open(physical, "r");
-    try {
-      const before = await handle.stat({ bigint: true });
-      const bytes = await handle.readFile();
-      const after = await handle.stat({ bigint: true });
-      if (
-        identity(before, physical) !== id ||
-        before.size !== after.size ||
-        before.mtimeNs !== after.mtimeNs ||
-        before.ctimeNs !== after.ctimeNs ||
-        BigInt(bytes.length) !== after.size
-      )
-        throw new EvidenceSourceFailure(
-          "source-changed",
-          "The file changed while it was being read; retry discovery.",
-        );
-      let content: string;
-      try {
-        content = new TextDecoder("utf-8", {
-          fatal: true,
-          ignoreBOM: true,
-        }).decode(bytes);
-      } catch {
-        throw new EvidenceSourceFailure(
-          "invalid-encoding",
-          "The selected file is not valid UTF-8; save it as UTF-8 or correct the files selection.",
-        );
-      }
-      this.files.set(id, {
-        id,
-        physicalPath: physical,
-        fingerprintPath: address.display,
-        ...(this.root.physical === undefined
-          ? {}
-          : {
-              fingerprintRoot: {
-                physicalPath: this.root.physical,
-                fingerprintPath: this.root.display,
-              },
-            }),
-        content,
-        digest: createHash("sha256").update(bytes).digest("hex"),
-        addresses: [address],
-      });
-      this.versions.set(id, version(after));
-    } finally {
-      await handle.close();
-    }
+    const captured: IEvidenceCapturedSource = await this.acquisition.read(
+      physical,
+      info,
+    );
+    this.files.set(id, {
+      id,
+      physicalPath: physical,
+      fingerprintPath: address.display,
+      ...(this.root.physical === undefined
+        ? {}
+        : {
+            fingerprintRoot: {
+              physicalPath: this.root.physical,
+              fingerprintPath: this.root.display,
+            },
+          }),
+      content: captured.content,
+      digest: captured.digest,
+      addresses: [address],
+    });
+    this.versions.set(id, version(captured.metadata));
   }
 
   /**
@@ -354,9 +327,9 @@ export class EvidenceSourceCollector {
       .split(/[\\/]/)
       .filter((part) => part !== "");
     for (const segment of segments) {
-      this.watch(EvidenceSourcePath.slash(current), false);
+      await this.watch(EvidenceSourcePath.slash(current), false);
       if (checkCase) {
-        const names = await readdir(current);
+        const names: string[] = await this.acquisition.directory(current);
         if (!names.includes(segment)) {
           const actual = names.find(
             (name) => name.toLowerCase() === segment.toLowerCase(),
@@ -369,7 +342,7 @@ export class EvidenceSourceCollector {
         }
       }
       current = path.join(current, segment);
-      this.watch(EvidenceSourcePath.slash(current), false);
+      await this.watch(EvidenceSourcePath.slash(current), false);
       const entry = await lstat(current);
       if (entry.isSymbolicLink()) {
         if (links.has(current))
@@ -397,7 +370,8 @@ export class EvidenceSourceCollector {
    * consumer can promote it to recursive watching without losing earlier
    * observations.
    */
-  private watch(location: string, recursive: boolean): void {
+  private async watch(location: string, recursive: boolean): Promise<void> {
+    await EvidenceSourceObservationScope.observe({ path: location, recursive });
     const existing = this.dependencies.get(location);
     this.dependencies.set(location, {
       path: location,

@@ -1,9 +1,10 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import { createHash } from "node:crypto";
 
 import typia from "typia";
 
 import { EvidenceFingerprintIndex } from "../../internal/EvidenceFingerprintIndex";
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
@@ -100,7 +101,9 @@ export class EvidencePhpAdapter implements IEvidenceAdapter<"php"> {
       }
       const published = this.materializeUnits(inventory, analyses);
       this.materializeDocumentation(inventory, analyses, published);
-      const output = new EvidenceInventory([inventory]).snapshot();
+      const output: IEvidenceInventory = new EvidenceInventoryIndex([
+        inventory,
+      ]).snapshot();
       // Context hashes depend on valid declaration content ranges. Do not certify
       // them when normalization has already found an incomplete inventory.
       if (output.complete) this.contextDigests(output, analyses);
@@ -254,8 +257,7 @@ export class EvidencePhpAdapter implements IEvidenceAdapter<"php"> {
             ...(parentId === undefined ? {} : { parentId }),
           };
           units.set(id, unit);
-        } else if (!unit.sites.some((site) => site.id === declaration.site.id))
-          unit.sites.push(structuredClone(declaration.site));
+        } else EvidenceUnitSites.append(unit, declaration.site);
 
         for (const sourceAddress of analysis.source.addresses) {
           const address: IEvidencePublicAddress = {

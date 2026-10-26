@@ -62,42 +62,54 @@ export namespace EvidenceSwaggerRemoteReader {
    * @evidence contracts/performance.md#bound-retention-and-release-resources The stream is consumed or cancelled and the request is bounded by its timeout signal.
    */
   export async function read(url: URL): Promise<IEvidenceRemoteSwaggerSource> {
-    const response = await fetch(url, {
+    const response: Response = await fetch(url, {
       signal: AbortSignal.timeout(REMOTE_TIMEOUT_MILLISECONDS),
     });
-    if (!response.ok)
+    if (!response.ok) {
+      await response.body?.cancel().catch((): void => {});
       throw new Error(
         `HTTP ${response.status} ${response.statusText === "" ? "response" : response.statusText}`,
       );
-    const declared = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declared) && declared > MAX_DOCUMENT_BYTES)
+    }
+    const declared: number = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_DOCUMENT_BYTES) {
+      await response.body?.cancel().catch((): void => {});
       throw new Error(
         `The Swagger document exceeds the ${MAX_DOCUMENT_BYTES} byte limit.`,
       );
+    }
     if (response.body === null) return decode(new Uint8Array());
     const reader: ReadableStreamDefaultReader<Uint8Array> =
       response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let length = 0;
-    let next: ReadableStreamReadResult<Uint8Array> = await reader.read();
-    while (next.done === false) {
-      length += next.value.byteLength;
-      if (length > MAX_DOCUMENT_BYTES) {
-        await reader.cancel();
-        throw new Error(
-          `The Swagger document exceeds the ${MAX_DOCUMENT_BYTES} byte limit.`,
-        );
+    try {
+      const chunks: Uint8Array[] = [];
+      let length: number = 0;
+      let next: ReadableStreamReadResult<Uint8Array> = await reader.read();
+      while (next.done === false) {
+        length += next.value.byteLength;
+        if (length > MAX_DOCUMENT_BYTES) {
+          throw new Error(
+            `The Swagger document exceeds the ${MAX_DOCUMENT_BYTES} byte limit.`,
+          );
+        }
+        chunks.push(next.value);
+        next = await reader.read();
       }
-      chunks.push(next.value);
-      next = await reader.read();
+      const bytes: Uint8Array = new Uint8Array(length);
+      let offset: number = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return decode(bytes);
+    } finally {
+      try {
+        await reader.cancel();
+      } catch {
+        /* Preserve the original read or decode failure. */
+      }
+      reader.releaseLock();
     }
-    const bytes = new Uint8Array(length);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return decode(bytes);
   }
 
   /**

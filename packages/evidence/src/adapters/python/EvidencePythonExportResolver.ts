@@ -1,3 +1,6 @@
+import { propagateEvidenceNames } from "../../internal/propagateEvidenceNames";
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
+import type { IEvidencePythonOwnedUnit } from "./IEvidencePythonOwnedUnit";
 import path from "node:path";
 
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
@@ -89,10 +92,28 @@ export class EvidencePythonExportResolver {
           )
             names.add(binding.localName);
       for (const name of analysis.all.names) names.add(name);
+      const roots: Map<string, IEvidencePythonOwnedUnit[]> = new Map();
+      for (const unit of analysis.units)
+        for (const root of unit.roots) {
+          const entries: IEvidencePythonOwnedUnit[] = roots.get(root) ?? [];
+          entries.push(unit);
+          roots.set(root, entries);
+        }
       this.modules.set(analysis.source.id, {
         source: analysis.source,
         all: analysis.all,
         bindings: analysis.bindings,
+        locals: groupEvidenceRecords(
+          analysis.bindings.filter(
+            (entry: IEvidencePythonBinding): boolean =>
+              entry.localName !== undefined,
+          ),
+          (entry: IEvidencePythonBinding): string => entry.localName ?? "",
+        ),
+        stars: analysis.bindings.filter(
+          (entry: IEvidencePythonBinding): boolean => entry.kind === "star",
+        ),
+        roots,
         units: analysis.units,
         names,
       });
@@ -174,26 +195,28 @@ export class EvidencePythonExportResolver {
    * obtain public names from another star import.
    */
   private expandStars(): void {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const module of this.modules.values()) {
-        if (module.all.state === "static") continue;
-        for (const binding of module.bindings) {
-          if (binding.kind !== "star" || binding.specifier === undefined)
-            continue;
-          const target = this.target(module.source, binding.specifier);
-          const dependency =
-            target === undefined ? undefined : this.modules.get(target);
-          if (dependency === undefined) continue;
-          for (const name of dependency.names)
-            if (!name.startsWith("_") && !module.names.has(name)) {
-              module.names.add(name);
-              changed = true;
-            }
-        }
+    const names: Map<string, Set<string>> = new Map();
+    const subscribers: Map<string, Set<string>> = new Map();
+    for (const module of this.modules.values()) {
+      names.set(module.source.id, module.names);
+      if (module.all.state === "static") continue;
+      for (const edge of module.stars) {
+        if (edge.specifier === undefined) continue;
+        const target: string | undefined = this.target(
+          module.source,
+          edge.specifier,
+        );
+        if (target === undefined) continue;
+        const entries: Set<string> = subscribers.get(target) ?? new Set();
+        entries.add(module.source.id);
+        subscribers.set(target, entries);
       }
     }
+    propagateEvidenceNames(
+      names,
+      subscribers,
+      (name: string): boolean => !name.startsWith("_"),
+    );
   }
 
   /**
@@ -240,10 +263,17 @@ export class EvidencePythonExportResolver {
       return { bindings: [], cyclic: false };
 
     visited.add(key);
-    let winner = module.bindings
-      .filter((binding) => binding.localName === name)
-      .sort((left, right) => right.order - left.order)[0];
-    for (const binding of module.bindings) {
+    let winner: IEvidencePythonBinding | undefined = (
+      module.locals.get(name) ?? []
+    ).reduce<IEvidencePythonBinding | undefined>(
+      (
+        current: IEvidencePythonBinding | undefined,
+        entry: IEvidencePythonBinding,
+      ): IEvidencePythonBinding =>
+        current === undefined || entry.order > current.order ? entry : current,
+      undefined,
+    );
+    for (const binding of module.stars) {
       if (
         binding.kind !== "star" ||
         binding.specifier === undefined ||
@@ -366,8 +396,7 @@ export class EvidencePythonExportResolver {
       return materialized;
     }
     let materialized = false;
-    for (const owned of module.units) {
-      if (!owned.roots.includes(binding.root)) continue;
+    for (const owned of module.roots.get(binding.root) ?? []) {
       const address: IEvidencePublicAddress = {
         unitId: owned.unit.id,
         file: "",

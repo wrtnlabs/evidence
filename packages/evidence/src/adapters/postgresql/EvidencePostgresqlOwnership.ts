@@ -1,3 +1,5 @@
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
+import type { IEvidenceSqlDeclaration } from "../sql/IEvidenceSqlDeclaration";
 import typia from "typia";
 
 import type { IEvidenceSqlFileAnalysis } from "../sql/IEvidenceSqlFileAnalysis";
@@ -35,32 +37,44 @@ export namespace EvidencePostgresqlOwnership {
   export function resolve(input: IEvidenceSqlFileAnalysis[]): void {
     const analyses = typia.assert<IEvidencePostgresqlFileAnalysis[]>(input);
     const declarations = analyses.flatMap((analysis) => analysis.declarations);
+    const introducing: Map<string, IEvidenceSqlDeclaration[]> =
+      groupEvidenceRecords(
+        declarations.filter(
+          (entry: IEvidenceSqlDeclaration): boolean => entry.merge !== true,
+        ),
+        (entry: IEvidenceSqlDeclaration): string =>
+          JSON.stringify([entry.symbol, entry.identity]),
+      );
+    const comments: Map<string, number> = new Map();
     for (const analysis of analyses)
+      for (const reference of analysis.references ?? [])
+        if (reference.comment) {
+          const key: string = JSON.stringify(reference.identity);
+          comments.set(key, (comments.get(key) ?? 0) + 1);
+        }
+    for (const analysis of analyses) {
+      const local: Map<string, IEvidenceSqlDeclaration> = new Map(
+        analysis.declarations.map(
+          (
+            entry: IEvidenceSqlDeclaration,
+          ): [string, IEvidenceSqlDeclaration] => [entry.id, entry],
+        ),
+      );
       for (const reference of analysis.references ?? []) {
-        const declaration = analysis.declarations.find(
-          (candidate) => candidate.id === reference.declarationId,
+        const declaration: IEvidenceSqlDeclaration | undefined = local.get(
+          reference.declarationId,
         );
         if (declaration === undefined) continue;
-        const matches = declarations.filter(
-          (candidate) =>
-            candidate.merge !== true &&
-            candidate.symbol === declaration.symbol &&
-            JSON.stringify(candidate.identity) ===
-              JSON.stringify(reference.identity),
-        );
-        const original = matches[0];
-        const comments = analyses
-          .flatMap((candidate) => candidate.references ?? [])
-          .filter(
-            (candidate) =>
-              candidate.comment &&
-              JSON.stringify(candidate.identity) ===
-                JSON.stringify(reference.identity),
-          );
+        const matches: IEvidenceSqlDeclaration[] =
+          introducing.get(
+            JSON.stringify([declaration.symbol, reference.identity]),
+          ) ?? [];
+        const original: IEvidenceSqlDeclaration | undefined = matches[0];
         if (
           matches.length !== 1 ||
           original === undefined ||
-          (reference.comment && comments.length !== 1)
+          (reference.comment &&
+            comments.get(JSON.stringify(reference.identity)) !== 1)
         ) {
           analysis.complete = false;
           analysis.diagnostics.push({
@@ -80,6 +94,7 @@ export namespace EvidencePostgresqlOwnership {
         if (original.ownerDeclarationId !== undefined)
           declaration.ownerDeclarationId = original.ownerDeclarationId;
       }
+    }
     const unavailable = new Set(
       declarations
         .filter((declaration) => !declaration.public)

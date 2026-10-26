@@ -1,17 +1,21 @@
+import type { IEvidenceGraphEdge } from "../structures/IEvidenceGraphEdge";
+import type { IEvidenceQueryResolution } from "../internal/IEvidenceQueryResolution";
+import type { IEvidenceTargetResolution } from "../structures/IEvidenceTargetResolution";
 import path from "node:path";
 
 import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
-import { EvidenceFingerprint } from "../graph/EvidenceFingerprint";
-import { EvidenceInventory } from "../graph/EvidenceInventory";
+
+import { EvidenceAnalysisIndexes } from "../internal/EvidenceAnalysisIndexes";
+import { EvidenceQueryInventoryIndex } from "../internal/EvidenceQueryInventoryIndex";
+
 import { EvidenceLanguageRegistry } from "../parsers/EvidenceLanguageRegistry";
-import { EvidenceTargetResolver } from "../targets/EvidenceTargetResolver";
+
 import { EvidenceInventoryMerge } from "../internal/EvidenceInventoryMerge";
 import type { IEvidenceQueryPopulation } from "../internal/IEvidenceQueryPopulation";
 import { EvidenceQueryPopulationContext } from "../contexts/EvidenceQueryPopulationContext";
 import type { IEvidenceQueryContext } from "../contexts/IEvidenceQueryContext";
 import { EvidenceMarkdownTarget } from "../adapters/markdown/EvidenceMarkdownTarget";
 import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
-import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
 import type { IEvidenceDeclaration } from "../structures/IEvidenceDeclaration";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
 import type { IEvidenceGraphBoundary } from "../structures/IEvidenceGraphBoundary";
@@ -139,27 +143,13 @@ export namespace EvidenceQueryProgrammer {
   ): Promise<IEvidenceInspectReport> {
     const { analysis } = context;
     const root = context.cwd;
-    const all = context.populations;
-    const exact = new Set(
-      all.flatMap((population) =>
-        populationHasTarget(population, target, root)
-          ? [scopeId(population.scope)]
-          : [],
-      ),
-    );
-    // An indexed spelling is authoritative: grammar inference is only a fallback
-    // when no configured identity exposes this exact public target.
-    const selected =
-      exact.size === 0
-        ? applicablePopulations(all, target)
-        : all.filter((population) => exact.has(scopeId(population.scope)));
-    const inspections = (
-      await Promise.all(
-        selected.map((population) =>
-          inspectPopulation(analysis, population, root, target),
-        ),
+    const inspections: IEvidenceInspection[] = (await resolve(context, target))
+      .map((entry: IEvidenceQueryResolution): IEvidenceInspection =>
+        inspectPopulation(analysis, entry, root),
       )
-    ).sort((left, right) => compare(scopeId(left.scope), scopeId(right.scope)));
+      .sort((left, right) =>
+        compare(scopeId(left.scope), scopeId(right.scope)),
+      );
     const diagnostics = uniqueDiagnostics([
       ...analysis.report.diagnostics,
       ...inspections.flatMap((inspection) => inspection.diagnostics),
@@ -186,6 +176,63 @@ export namespace EvidenceQueryProgrammer {
       inspections,
       diagnostics,
     };
+  }
+
+  /**
+   * Resolves a query target across applicable populations without projecting
+   * inspection details.
+   *
+   * @evidence contracts/common.md#principled-implementation Exact configured spellings take precedence over grammar inference; every selected population resolves independently through its retained resolver.
+   * @evidence contracts/common.md#clear-and-simple-design Focused resolution reuses the existing population and inventory indexes; fingerprint and inspection payload construction remains in the inspection path.
+   * @evidence contracts/common.md#prohibited-implementation-shortcuts Resolving a focused target retains all candidate populations and incomplete outcomes; only unused inspection details are omitted.
+   * @evidence contracts/common.md#meaningful-documentation The resolve comment states focused-query ownership and its omission of unused inspection materialization.
+   * @evidence contracts/performance.md#efficient-algorithms After one exact-target index construction, matching is linear in population count plus actual resolver candidates.
+   * @evidence contracts/performance.md#reuse-equivalent-work Focused selection and detailed inspection share address indexes and avoid unrelated fingerprint, child and diagnostic projection work.
+   * @evidence contracts/performance.md#bound-retention-and-release-resources Returned records borrow the query session and retain no filesystem handle.
+   */
+  export async function resolve(
+    context: IEvidenceQueryContext,
+    target: string,
+  ): Promise<IEvidenceQueryResolution[]> {
+    const root: string = context.cwd;
+    const all: EvidenceQueryPopulationContext[] = context.populations;
+    const exact: Set<string> = new Set(
+      all.flatMap((population: EvidenceQueryPopulationContext): string[] =>
+        populationHasTarget(population, target, root)
+          ? [scopeId(population.scope)]
+          : [],
+      ),
+    );
+    // An indexed spelling is authoritative: grammar inference is only a fallback
+    // when no configured identity exposes this exact public target.
+    const selected: EvidenceQueryPopulationContext[] =
+      exact.size === 0
+        ? applicablePopulations(all, target)
+        : all.filter((population: EvidenceQueryPopulationContext): boolean =>
+            exact.has(scopeId(population.scope)),
+          );
+
+    return Promise.all(
+      selected.map(
+        async (
+          population: EvidenceQueryPopulationContext,
+        ): Promise<IEvidenceQueryResolution> => {
+          const host: IEvidenceHost = commandHost(root);
+          const statement: IEvidenceTargetStatement = {
+            target,
+            hostId: host.id,
+            location: { file: host.file, range: host.range },
+          };
+          const resolution: IEvidenceTargetResolution =
+            await population.resolver.resolve(
+              statement,
+              host,
+              population.unitIds,
+            );
+          return { population, resolution };
+        },
+      ),
+    );
   }
 
   /**
@@ -257,6 +304,11 @@ export namespace EvidenceQueryProgrammer {
           hostCoverage: obligation.hostCoverage,
         });
 
+        const usedHosts: Set<string> = new Set(
+          obligation.edges.flatMap(
+            (edge: IEvidenceGraphEdge): string[] => edge.hostUnitIds,
+          ),
+        );
         for (const item of listPopulation(claimPopulation, root))
           if (item.selection === "selected")
             nodes.set(
@@ -265,9 +317,7 @@ export namespace EvidenceQueryProgrammer {
                 boundaryId,
                 "claim",
                 item,
-                obligation.edges.some((edge) =>
-                  edge.hostUnitIds.includes(item.unitId),
-                ),
+                usedHosts.has(item.unitId),
                 false,
               ),
             );
@@ -285,7 +335,7 @@ export namespace EvidenceQueryProgrammer {
 
         for (const edge of obligation.edges) {
           const declaration = requireDeclaration(
-            claim.inventory,
+            claimPopulation.records,
             edge.declarationId,
           );
           const sourceNodeIds = graphSourceNodes(
@@ -323,13 +373,16 @@ export namespace EvidenceQueryProgrammer {
           });
         }
         for (const resolution of reference.reviewResolutions ?? []) {
-          const review = requireReview(claim.inventory, resolution.reviewId);
+          const review: IEvidenceReview = requireReview(
+            claimPopulation.records,
+            resolution.reviewId,
+          );
           const sourceNodeIds = graphSourceNodes(
             nodes,
             boundaryId,
             claimPopulation,
             review.hostId,
-            requireHost(claim.inventory.hosts, review.hostId).unitIds,
+            requireHost(claimPopulation.records, review.hostId).unitIds,
             root,
           );
           const targetNodeIds = resolution.resolution.units.map((unit) => {
@@ -442,6 +495,7 @@ export namespace EvidenceQueryProgrammer {
   export function populations(
     analysis: IEvidenceCheckAnalysis,
   ): EvidenceQueryPopulationContext[] {
+    const indexes: EvidenceAnalysisIndexes = new EvidenceAnalysisIndexes();
     const output: IEvidenceQueryPopulation[] = [];
     analysis.graphInput.claims.forEach((claim, claimPosition) => {
       const reportClaim = requireReportClaim(analysis, claimPosition);
@@ -452,7 +506,7 @@ export namespace EvidenceQueryProgrammer {
           ...(reportClaim.name === undefined ? {} : { name: reportClaim.name }),
           type: reportClaim.type,
         },
-        inventory: scoped(claim.inventory),
+        inventory: indexes.inventory(claim.inventory, true).snapshot(),
         unitIds: claim.unitIds,
       });
       claim.references.forEach((reference, referencePosition) => {
@@ -468,7 +522,7 @@ export namespace EvidenceQueryProgrammer {
             reference: reportObligation.reference,
             type: reportObligation.type,
           },
-          inventory: scoped(reference.inventory),
+          inventory: indexes.inventory(reference.inventory, true).snapshot(),
           unitIds: reference.unitIds,
           reference,
           obligation: requireResultObligation(
@@ -480,20 +534,16 @@ export namespace EvidenceQueryProgrammer {
       });
     });
     return output.map(
-      (population) => new EvidenceQueryPopulationContext(population),
+      (
+        population: IEvidenceQueryPopulation,
+      ): EvidenceQueryPopulationContext => {
+        return new EvidenceQueryPopulationContext(
+          population,
+          EvidenceQueryInventoryIndex.borrow(population.inventory),
+          indexes,
+        );
+      },
     );
-  }
-
-  /**
-   * Returns the resolving view of one population's inventory.
-   *
-   * Queries resolve targets through EvidenceTargetResolver, which derives file
-   * scopes. Listing, inspection and coverage must see the same units, so a file
-   * target accepted by `--only` or `inspect` is also a listable, inspectable
-   * structural ancestor of the declarations it owns.
-   */
-  function scoped(inventory: IEvidenceInventory): IEvidenceInventory {
-    return new EvidenceInventory([inventory], { fileScopes: true }).snapshot();
   }
 
   /**
@@ -558,22 +608,12 @@ export namespace EvidenceQueryProgrammer {
    * comment. The returned units, coverage, acknowledgements, reviews, and
    * diagnostics all remain scoped to this one claim or reference context.
    */
-  async function inspectPopulation(
+  function inspectPopulation(
     analysis: IEvidenceCheckAnalysis,
-    population: EvidenceQueryPopulationContext,
+    entry: IEvidenceQueryResolution,
     cwd: string,
-    target: string,
-  ): Promise<IEvidenceInspection> {
-    const host = commandHost(cwd);
-    const statement: IEvidenceTargetStatement = {
-      target,
-      hostId: host.id,
-      location: { file: host.file, range: host.range },
-    };
-    const resolution = await new EvidenceTargetResolver(
-      [population.inventory],
-      population.scope.type,
-    ).resolve(statement, host, population.unitIds);
+  ): IEvidenceInspection {
+    const { population, resolution }: IEvidenceQueryResolution = entry;
     const units = resolution.units.map((unit) =>
       inspectedUnit(population, unit, cwd),
     );
@@ -618,23 +658,25 @@ export namespace EvidenceQueryProgrammer {
     const item = listItem(population, unit, cwd);
     if (item === undefined)
       throw new Error(`Evidence identity '${unit.id}' has no public address.`);
-    const children = population.inventory.units.flatMap((candidate) => {
-      if (candidate.parentId !== unit.id) return [];
-      const child = listItem(population, candidate, cwd);
+    const children: IEvidenceListItem[] = (
+      population.records.children.get(unit.id) ?? []
+    ).flatMap((candidate: IEvidenceUnit): IEvidenceListItem[] => {
+      const child: IEvidenceListItem | undefined = listItem(
+        population,
+        candidate,
+        cwd,
+      );
       return child === undefined ? [] : [child];
     });
     return {
       item,
       children,
-      hosts: population.inventory.hosts
-        .filter((host) => host.unitIds.includes(unit.id))
-        .sort((left, right) => compare(left.id, right.id)),
+      hosts: [...(population.records.hosts.get(unit.id) ?? [])].sort(
+        (left, right) => compare(left.id, right.id),
+      ),
       ...(population.inventory.complete
         ? {
-            fingerprint: EvidenceFingerprint.inspect(
-              population.inventory,
-              unit.id,
-            ),
+            fingerprint: population.fingerprints.inspect(unit.id),
           }
         : {}),
     };
@@ -708,12 +750,13 @@ export namespace EvidenceQueryProgrammer {
             !edge.unitIds.some((unitId) => unitIds.has(unitId))
           )
             return [];
-          const declaration = input.inventory.declarations.find(
-            (candidate) => candidate.id === edge.declarationId,
-          );
+          const records: EvidenceQueryInventoryIndex | undefined =
+            EvidenceQueryInventoryIndex.borrow(input.inventory);
+          const declaration: IEvidenceDeclaration | undefined =
+            records?.declarations.get(edge.declarationId);
           if (declaration === undefined) return [];
-          const host = input.inventory.hosts.find(
-            (candidate) => candidate.id === declaration.hostId,
+          const host: IEvidenceHost | undefined = records?.hostIds.get(
+            declaration.hostId,
           );
           if (host === undefined) return [];
           return [
@@ -772,12 +815,14 @@ export namespace EvidenceQueryProgrammer {
             )
           )
             return [];
-          const review = claim.inventory.reviews.find(
-            (candidate) => candidate.id === entry.reviewId,
+          const records: EvidenceQueryInventoryIndex | undefined =
+            EvidenceQueryInventoryIndex.borrow(claim.inventory);
+          const review: IEvidenceReview | undefined = records?.reviews.get(
+            entry.reviewId,
           );
           if (review === undefined) return [];
-          const host = claim.inventory.hosts.find(
-            (candidate) => candidate.id === review.hostId,
+          const host: IEvidenceHost | undefined = records?.hostIds.get(
+            review.hostId,
           );
           if (host === undefined) return [];
           return [
@@ -885,14 +930,21 @@ export namespace EvidenceQueryProgrammer {
     target: string,
     cwd: string,
   ): boolean {
-    const configured = population.configured;
-    return population.inventory.addresses.some(
-      (address) =>
-        configured.has(address.unitId) &&
-        formatAddress(population, address.file, address.segments, cwd).includes(
-          target,
-        ),
-    );
+    let exact: Set<string> | undefined = population.exactTargets.get(cwd);
+    if (exact === undefined) {
+      exact = new Set<string>();
+      for (const address of population.inventory.addresses)
+        if (population.configured.has(address.unitId))
+          for (const spelling of formatAddress(
+            population,
+            address.file,
+            address.segments,
+            cwd,
+          ))
+            exact.add(spelling);
+      population.exactTargets.set(cwd, exact);
+    }
+    return exact.has(target);
   }
 
   /**
@@ -916,15 +968,10 @@ export namespace EvidenceQueryProgrammer {
         ? [segments[0]]
         : [];
     if (population.scope.type === "markdown") {
-      const logical = population.inventory.sources.flatMap((source) =>
-        source.addresses.flatMap((address) =>
-          address.selected !== false &&
-          EvidenceFileTarget.normalize(address.absolute) ===
-            EvidenceFileTarget.normalize(file)
-            ? [address.relative]
-            : [],
-        ),
-      );
+      const logical: string[] =
+        population.records.logicalFiles.get(
+          EvidenceFileTarget.normalize(file),
+        ) ?? [];
       const files = logical.length === 0 ? [file] : logical;
       return files.map((candidate) =>
         segments.length === 0
@@ -1031,7 +1078,7 @@ export namespace EvidenceQueryProgrammer {
         graphUnitNodeId(boundaryId, "claim", unitId),
       );
     }
-    const host = requireHost(population.inventory.hosts, hostId);
+    const host: IEvidenceHost = requireHost(population.records, hostId);
     const id = `${boundaryId}:host:${host.id}`;
     const node: IEvidenceGraphHostNode = {
       id,
@@ -1062,9 +1109,7 @@ export namespace EvidenceQueryProgrammer {
   ): void {
     const id = graphUnitNodeId(boundaryId, role, unitId);
     if (nodes.has(id)) return;
-    const unit = population.inventory.units.find(
-      (candidate) => candidate.id === unitId,
-    );
+    const unit: IEvidenceUnit | undefined = population.units.get(unitId);
     if (unit === undefined)
       throw new Error(
         `Graph identity '${unitId}' is absent from its inventory.`,
@@ -1086,14 +1131,10 @@ export namespace EvidenceQueryProgrammer {
     population: EvidenceQueryPopulationContext,
     unitId: string,
   ): boolean {
-    const obligation = population.obligation;
-    if (obligation === undefined) return false;
-    if (obligation.coveredUnitIds.includes(unitId)) return true;
-    if (selection(population, unitId) !== "ancestor") return false;
-    const descendants = population.selectedDescendants(unitId);
     return (
-      descendants.length !== 0 &&
-      descendants.every((id) => obligation.coveredUnitIds.includes(id))
+      population.covered.has(unitId) ||
+      (selection(population, unitId) === "ancestor" &&
+        population.subtreeCovered.has(unitId))
     );
   }
 
@@ -1108,13 +1149,19 @@ export namespace EvidenceQueryProgrammer {
     population: EvidenceQueryPopulationContext,
     unitId: string,
   ): boolean {
-    const obligation = population.obligation;
-    if (obligation === undefined) return false;
-    if (obligation.missingUnitIds.includes(unitId)) return true;
-    return population
-      .selectedDescendants(unitId)
-      .some((id) => obligation.missingUnitIds.includes(id));
+    return (
+      population.missing.has(unitId) || population.subtreeMissing.has(unitId)
+    );
   }
+
+  /**
+   * Coordinates retained only while their immutable query population array
+   * lives.
+   */
+  const populationCoordinates: WeakMap<
+    EvidenceQueryPopulationContext[],
+    Map<string, EvidenceQueryPopulationContext>
+  > = new WeakMap();
 
   /**
    * Retrieves the query population at an exact claim/reference coordinate.
@@ -1130,11 +1177,22 @@ export namespace EvidenceQueryProgrammer {
     claim: number,
     reference?: number,
   ): EvidenceQueryPopulationContext {
-    const population = entries.find(
-      (entry) =>
-        entry.scope.role === role &&
-        entry.scope.claim === claim &&
-        entry.scope.reference === reference,
+    let index: Map<string, EvidenceQueryPopulationContext> | undefined =
+      populationCoordinates.get(entries);
+    if (index === undefined) {
+      index = new Map();
+      for (const entry of entries) {
+        const key: string = JSON.stringify([
+          entry.scope.role,
+          entry.scope.claim,
+          entry.scope.reference,
+        ]);
+        if (!index.has(key)) index.set(key, entry);
+      }
+      populationCoordinates.set(entries, index);
+    }
+    const population: EvidenceQueryPopulationContext | undefined = index.get(
+      JSON.stringify([role, claim, reference]),
     );
     if (population === undefined)
       throw new Error(
@@ -1265,12 +1323,11 @@ export namespace EvidenceQueryProgrammer {
    * edge.
    */
   function requireDeclaration(
-    inventory: EvidenceQueryPopulationContext["inventory"],
+    inventory: EvidenceQueryInventoryIndex,
     id: string,
   ): IEvidenceDeclaration {
-    const declaration = inventory.declarations.find(
-      (candidate) => candidate.id === id,
-    );
+    const declaration: IEvidenceDeclaration | undefined =
+      inventory.declarations.get(id);
     if (declaration === undefined)
       throw new Error(`Missing graph acknowledgement '${id}'.`);
     return declaration;
@@ -1284,10 +1341,10 @@ export namespace EvidenceQueryProgrammer {
    * the public report cannot accurately represent the review without it.
    */
   function requireReview(
-    inventory: EvidenceQueryPopulationContext["inventory"],
+    inventory: EvidenceQueryInventoryIndex,
     id: string,
   ): IEvidenceReview {
-    const review = inventory.reviews.find((candidate) => candidate.id === id);
+    const review: IEvidenceReview | undefined = inventory.reviews.get(id);
     if (review === undefined) throw new Error(`Missing graph review '${id}'.`);
     return review;
   }
@@ -1299,8 +1356,11 @@ export namespace EvidenceQueryProgrammer {
    * absent host violates inventory ownership, so callers throw before exporting
    * a source edge with a fabricated or incomplete origin.
    */
-  function requireHost(hosts: IEvidenceHost[], id: string): IEvidenceHost {
-    const host = hosts.find((candidate) => candidate.id === id);
+  function requireHost(
+    records: EvidenceQueryInventoryIndex,
+    id: string,
+  ): IEvidenceHost {
+    const host: IEvidenceHost | undefined = records.hostIds.get(id);
     if (host === undefined) throw new Error(`Missing graph host '${id}'.`);
     return host;
   }

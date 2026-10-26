@@ -1,3 +1,4 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 import { EvidenceTypeScriptSyntax } from "../../parsers/EvidenceTypeScriptSyntax";
 
@@ -1492,11 +1493,12 @@ export class EvidenceEcmaScriptFileScanner {
       record = { unit, root, suffix, typeSpace, valueSpace };
       this.units.set(semanticId, record);
     } else {
-      const previous = record.unit.sites.find(
-        (candidate) => candidate.id === site.id,
+      const previous: IEvidenceUnitSite | undefined = EvidenceUnitSites.append(
+        record.unit,
+        site,
+        false,
       );
-      if (previous === undefined) record.unit.sites.push(site);
-      else previous.content.push(...site.content);
+      if (previous !== undefined) previous.content.push(...site.content);
       record.typeSpace ||= typeSpace;
       record.valueSpace ||= valueSpace;
     }

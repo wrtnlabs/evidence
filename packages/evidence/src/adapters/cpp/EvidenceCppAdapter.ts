@@ -1,6 +1,9 @@
+import type { IEvidenceCppAliasTrie } from "./IEvidenceCppAliasTrie";
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
@@ -109,7 +112,7 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
       // set before a documentation position can be assigned its semantic owners.
       const published = this.materializeUnits(inventory, analyses);
       this.materializeDocumentation(inventory, analyses, published);
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     } finally {
       await parser.close();
     }
@@ -255,8 +258,7 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
         ...(parentId === undefined ? {} : { parentId }),
       };
       for (const declaration of declarations)
-        if (!unit.sites.some((site) => site.id === declaration.site.id))
-          unit.sites.push(structuredClone(declaration.site));
+        EvidenceUnitSites.append(unit, declaration.site);
       units.set(unit.id, unit);
     }
     inventory.units.push(...units.values());
@@ -284,16 +286,22 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
       units,
       published,
     );
+    const descendants: Map<string, IEvidenceUnit[]> = new Map();
+    for (const unit of units.values())
+      for (let length: number = 0; length <= unit.identity.length; ++length) {
+        const key: string = JSON.stringify(unit.identity.slice(0, length));
+        const entries: IEvidenceUnit[] = descendants.get(key) ?? [];
+        entries.push(unit);
+        descendants.set(key, entries);
+      }
     for (const resolved of resolvedAliases) {
       const unit = units.get(resolved.target.id);
-      if (
-        unit !== undefined &&
-        !unit.sites.some((site) => site.id === resolved.alias.site.id)
-      )
-        unit.sites.push(structuredClone(resolved.alias.site));
+      if (unit !== undefined)
+        EvidenceUnitSites.append(unit, resolved.alias.site);
       for (const sourceAddress of resolved.analysis.source.addresses)
-        for (const candidate of units.values()) {
-          if (!prefix(candidate.identity, resolved.target.identity)) continue;
+        for (const candidate of descendants.get(
+          JSON.stringify(resolved.target.identity),
+        ) ?? []) {
           this.addAddress(
             inventory,
             resolved.analysis,
@@ -390,9 +398,47 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
     const aliases = analyses.flatMap((analysis) =>
       analysis.aliases.map((alias) => ({ analysis, alias })),
     );
+    const exact: Map<string, IEvidenceUnit[]> = groupEvidenceRecords(
+      units.values(),
+      (unit: IEvidenceUnit): string => JSON.stringify(unit.identity),
+    );
+    const relaxed: IEvidenceCppAliasTrie = {
+      exact: new Map(),
+      names: new Map(),
+      units: [],
+    };
+    for (const unit of units.values()) {
+      let branch: IEvidenceCppAliasTrie = relaxed;
+      for (const part of unit.identity) {
+        let child: IEvidenceCppAliasTrie | undefined = branch.exact.get(part);
+        if (child === undefined) {
+          child = { exact: new Map(), names: new Map(), units: [] };
+          branch.exact.set(part, child);
+          for (const label of new Set([part, part.replace(/`\d+$/u, "")])) {
+            const entries: IEvidenceCppAliasTrie[] =
+              branch.names.get(label) ?? [];
+            entries.push(child);
+            branch.names.set(label, entries);
+          }
+        }
+        branch = child;
+      }
+      branch.units.push(unit);
+    }
+    const order: Map<string, number> = new Map(
+      Array.from(
+        units.keys(),
+        (id: string, index: number): [string, number] => [id, index],
+      ),
+    );
     for (const entry of aliases) {
       if (!entry.alias.public) continue;
-      const candidates = this.aliasCandidates(entry.alias, units);
+      const candidates: IEvidenceUnit[] = this.aliasCandidates(
+        entry.alias,
+        exact,
+        relaxed,
+        order,
+      );
       if (candidates.length !== 1) {
         this.problem(
           inventory,
@@ -413,28 +459,45 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
 
   private aliasCandidates(
     alias: IEvidenceCppAlias,
-    units: Map<string, IEvidenceUnit>,
+    exact: Map<string, IEvidenceUnit[]>,
+    relaxed: IEvidenceCppAliasTrie,
+    order: Map<string, number>,
   ): IEvidenceUnit[] {
-    const paths = [alias.target, [...alias.scopeIdentity, ...alias.target]];
-    const keys = new Set(paths.map((path) => JSON.stringify(path)));
-    let candidates = Array.from(units.values()).filter((unit) =>
-      keys.has(JSON.stringify(unit.identity)),
+    const paths: string[][] = [
+      alias.target,
+      [...alias.scopeIdentity, ...alias.target],
+    ];
+    const exactMatches: IEvidenceUnit[] = paths.flatMap(
+      (parts: string[]): IEvidenceUnit[] =>
+        exact.get(JSON.stringify(parts)) ?? [],
     );
-    if (candidates.length !== 0) return candidates;
-    candidates = Array.from(units.values()).filter((unit) =>
-      paths.some(
-        (path) =>
-          path.length === unit.identity.length &&
-          path.every((part, index) => {
-            const actual = unit.identity[index];
-            return (
-              actual !== undefined &&
-              (part === actual || part === actual.replace(/`\d+$/u, ""))
+    const candidates: IEvidenceUnit[] =
+      exactMatches.length !== 0
+        ? exactMatches
+        : paths.flatMap((parts: string[]): IEvidenceUnit[] => {
+            let branches: Set<IEvidenceCppAliasTrie> = new Set([relaxed]);
+            for (const part of parts) {
+              const next: Set<IEvidenceCppAliasTrie> = new Set();
+              for (const branch of branches)
+                for (const child of branch.names.get(part) ?? [])
+                  next.add(child);
+              branches = next;
+            }
+            return Array.from(branches).flatMap(
+              (branch: IEvidenceCppAliasTrie): IEvidenceUnit[] => branch.units,
             );
-          }),
-      ),
+          });
+    return Array.from(
+      new Map(
+        candidates.map((unit: IEvidenceUnit): [string, IEvidenceUnit] => [
+          unit.id,
+          unit,
+        ]),
+      ).values(),
+    ).sort(
+      (left: IEvidenceUnit, right: IEvidenceUnit): number =>
+        (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0),
     );
-    return candidates;
   }
 
   private addAddress(
@@ -458,13 +521,9 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
       );
       return;
     }
+    if (owner === unitId) return;
     owners.set(addressKey, unitId);
-    if (
-      !inventory.addresses.some(
-        (candidate) => JSON.stringify(candidate) === JSON.stringify(address),
-      )
-    )
-      inventory.addresses.push(address);
+    inventory.addresses.push(address);
   }
 
   private materializeDocumentation(
@@ -714,11 +773,4 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
       location: { file: analysis.source.physicalPath },
     });
   }
-}
-
-function prefix(identity: string[], parent: string[]): boolean {
-  return (
-    identity.length >= parent.length &&
-    parent.every((part, index) => identity[index] === part)
-  );
 }

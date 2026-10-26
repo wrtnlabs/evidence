@@ -1,3 +1,9 @@
+import type { IEvidenceGraphReport } from "../structures/IEvidenceGraphReport";
+import type { IEvidenceInspectReport } from "../structures/IEvidenceInspectReport";
+import type { IEvidenceListReport } from "../structures/IEvidenceListReport";
+import { EvidenceQueryProgrammer } from "../programmers/EvidenceQueryProgrammer";
+import { EvidenceUnitCheckProgrammer } from "../programmers/EvidenceUnitCheckProgrammer";
+import type { IEvidenceQueryContext } from "../contexts/IEvidenceQueryContext";
 import { dedent } from "@typia/utils";
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -14,6 +20,7 @@ import { EvidenceWatchReporter } from "../reporters/EvidenceWatchReporter";
 import { EvidenceArtifactTypes } from "../internal/EvidenceArtifactTypes";
 import { EvidenceConfigFormat } from "../internal/EvidenceConfigFormat";
 import { EvidenceConfigLoader } from "../loaders/EvidenceConfigLoader";
+import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
 import type { IEvidenceConfig } from "../structures/IEvidenceConfig";
 import type { IEvidenceConfigReport } from "../structures/IEvidenceConfigReport";
 import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
@@ -556,9 +563,8 @@ async function runAnalysis(
       const report: IEvidenceCheckReport =
         command.only === undefined
           ? analysis.report
-          : await EvidenceQuery.check(
-              analysis,
-              cwd,
+          : await EvidenceUnitCheckProgrammer.check(
+              queryContext(analysis, cwd),
               command.only,
               command.shallow === true,
               command.context === true,
@@ -591,9 +597,13 @@ async function runAnalysis(
     }
     // Query projections reuse the captured inventory and diagnostics. Reanalyzing
     // here could make a report disagree with the command's check boundary.
-    const query = new EvidenceQuery(analysis, cwd);
+    const query: IEvidenceQueryContext = queryContext(analysis, cwd);
     if (command.operation === "list") {
-      const report = query.list(command.language, command.kind);
+      const report: IEvidenceListReport = EvidenceQueryProgrammer.list(
+        query,
+        command.language,
+        command.kind,
+      );
       return writeReport(
         command.output,
         cwd,
@@ -603,7 +613,8 @@ async function runAnalysis(
       );
     }
     if (command.operation === "inspect") {
-      const report = await query.inspect(command.target);
+      const report: IEvidenceInspectReport =
+        await EvidenceQueryProgrammer.inspect(query, command.target);
       return writeReport(
         command.output,
         cwd,
@@ -612,7 +623,7 @@ async function runAnalysis(
         false,
       );
     }
-    const report = query.graph();
+    const report: IEvidenceGraphReport = EvidenceQueryProgrammer.graph(query);
     return writeReport(
       command.output,
       cwd,
@@ -1018,3 +1029,18 @@ const INITIAL_CONFIG = dedent`
   // Replace these globs with the public source and requirements in this project.
   export default ${JSON.stringify(INITIAL_DATA, null, 2)} satisfies IEvidenceConfig;
 `;
+
+/**
+ * Borrows command-owned analysis until rendering; no mutable object crosses
+ * this boundary.
+ */
+function queryContext(
+  analysis: IEvidenceCheckAnalysis,
+  cwd: string,
+): IEvidenceQueryContext {
+  return {
+    analysis,
+    cwd,
+    populations: EvidenceQueryProgrammer.populations(analysis),
+  };
+}

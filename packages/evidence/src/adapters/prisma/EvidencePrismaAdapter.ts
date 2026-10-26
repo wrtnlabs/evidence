@@ -1,6 +1,6 @@
 import typia from "typia";
 
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
 import type { IEvidencePrismaCommentRun } from "./IEvidencePrismaCommentRun";
 import type { IEvidencePrismaFileAnalysis } from "./IEvidencePrismaFileAnalysis";
@@ -73,7 +73,7 @@ export class EvidencePrismaAdapter implements IEvidenceAdapter<"prisma"> {
     const input = structuredClone(typia.assert(snapshot));
     const inventory = this.inventory(input);
     if (!input.complete || input.files.length === 0)
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
 
     const files = this.schemaFiles(input.files);
     let models: IEvidencePrismaModel[];
@@ -93,7 +93,7 @@ export class EvidencePrismaAdapter implements IEvidenceAdapter<"prisma"> {
           ? {}
           : { location: { file: files[0].source.physicalPath } }),
       });
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     }
 
     // The model parser owns schema semantics; the source scanner owns exact
@@ -104,7 +104,7 @@ export class EvidencePrismaAdapter implements IEvidenceAdapter<"prisma"> {
     );
     const owned = this.units(inventory, models, analyses, files);
     this.materialize(inventory, analyses, owned);
-    return new EvidenceInventory([inventory]).snapshot();
+    return new EvidenceInventoryIndex([inventory]).snapshot();
   }
 
   /**

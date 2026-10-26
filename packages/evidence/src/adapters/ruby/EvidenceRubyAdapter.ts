@@ -1,7 +1,8 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
@@ -99,7 +100,7 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
       // individual comment sites can contribute to the shared public identity.
       const published = this.materializeUnits(inventory, analyses);
       this.materializeDocumentation(inventory, analyses, published);
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     } finally {
       await parser.close();
     }
@@ -651,11 +652,11 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
   }
 
   private addSite(unit: IEvidenceUnit, candidate: IEvidenceUnitSite): void {
-    const site = unit.sites.find((entry) => entry.id === candidate.id);
-    if (site === undefined) {
-      unit.sites.push(structuredClone(candidate));
-      return;
-    }
+    const site: IEvidenceUnitSite | undefined = EvidenceUnitSites.append(
+      unit,
+      candidate,
+    );
+    if (site === undefined) return;
     for (const content of candidate.content)
       if (
         !site.content.some(

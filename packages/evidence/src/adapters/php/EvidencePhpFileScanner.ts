@@ -47,6 +47,8 @@ export class EvidencePhpFileScanner {
    * The scan returns these diagnostics instead of silently omitting dynamic
    * declarations.
    */
+  /** Diagnostic source identities already reported by this scanner. */
+  private readonly reported: Set<string> = new Set();
   private readonly diagnostics: IEvidenceDiagnostic[] = [];
 
   /**
@@ -378,6 +380,24 @@ export class EvidencePhpFileScanner {
    * inventory.
    */
   private dynamicProperties(root: EvidenceNode): void {
+    const owners: Map<string, IEvidencePhpDeclaration> = new Map();
+    const properties: Map<string, Set<string>> = new Map();
+    for (const declaration of this.declarations) {
+      const key: string = JSON.stringify([
+        declaration.form,
+        declaration.site.range.end.offset,
+      ]);
+      if (!owners.has(key)) owners.set(key, declaration);
+      if (
+        declaration.symbol === "property" &&
+        declaration.ownerDeclarationId !== undefined
+      ) {
+        const names: Set<string> =
+          properties.get(declaration.ownerDeclarationId) ?? new Set();
+        names.add(declaration.name);
+        properties.set(declaration.ownerDeclarationId, names);
+      }
+    }
     for (const member of root.descendantsOfType("member_access_expression")) {
       if (member.childForFieldName("object")?.text !== "$this") continue;
       let written = member;
@@ -410,21 +430,14 @@ export class EvidencePhpFileScanner {
         container = container.parent;
       if (container === null || container.type === "anonymous_class") continue;
       const ownerNode = container;
-      const owner = this.declarations.find(
-        (declaration) =>
-          declaration.form === ownerNode.type &&
-          declaration.site.range.end.offset === ownerNode.endIndex,
+      const owner: IEvidencePhpDeclaration | undefined = owners.get(
+        JSON.stringify([ownerNode.type, ownerNode.endIndex]),
       );
       const name = member.childForFieldName("name");
       if (
         owner !== undefined &&
         name?.type === "name" &&
-        this.declarations.some(
-          (declaration) =>
-            declaration.ownerDeclarationId === owner.id &&
-            declaration.symbol === "property" &&
-            declaration.name === `$${name.text}`,
-        )
+        properties.get(owner.id)?.has(`$${name.text}`) === true
       )
         continue;
       this.problem(
@@ -442,14 +455,9 @@ export class EvidencePhpFileScanner {
    * incomplete.
    */
   private problem(node: EvidenceNode, code: string, message: string): void {
-    if (
-      this.diagnostics.some(
-        (diagnostic) =>
-          diagnostic.code === `php-${code}` &&
-          diagnostic.location?.range?.start?.offset === node.startIndex,
-      )
-    )
-      return;
+    const key: string = JSON.stringify([code, node.startIndex]);
+    if (this.reported.has(key)) return;
+    this.reported.add(key);
     this.diagnostics.push({
       code: `php-${code}`,
       severity: "error",

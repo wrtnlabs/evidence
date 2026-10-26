@@ -1,3 +1,8 @@
+import { propagateEvidenceNames } from "../../internal/propagateEvidenceNames";
+import { EvidenceExportResolutionCache } from "../../internal/EvidenceExportResolutionCache";
+import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
+import type { IEvidenceEcmaScriptExport } from "./IEvidenceEcmaScriptExport";
+import type { IEvidenceEcmaScriptOwnedUnit } from "./IEvidenceEcmaScriptOwnedUnit";
 import path from "node:path";
 import { EvidenceEcmaScriptModulePaths } from "./EvidenceEcmaScriptModulePaths";
 
@@ -74,6 +79,9 @@ export class EvidenceEcmaScriptExportResolver {
    */
   private readonly reported = new Set<string>();
 
+  /** Completed recursive results qualified by component-local cycle context. */
+  private readonly recursive: EvidenceExportResolutionCache<IEvidenceEcmaScriptResolution>;
+
   /**
    * Indexes a complete set of scanned ECMAScript modules for publication.
    *
@@ -93,6 +101,20 @@ export class EvidenceEcmaScriptExportResolver {
         units: analysis.units,
         excludedRoots: new Set(analysis.excludedRoots),
         exports: analysis.exports,
+        explicit: groupEvidenceRecords(
+          analysis.exports.filter(
+            (entry: IEvidenceEcmaScriptExport): boolean =>
+              entry.kind !== "star" && entry.publicName !== undefined,
+          ),
+          (entry: IEvidenceEcmaScriptExport): string => entry.publicName ?? "",
+        ),
+        stars: analysis.exports.filter(
+          (entry: IEvidenceEcmaScriptExport): boolean => entry.kind === "star",
+        ),
+        roots: groupEvidenceRecords(
+          analysis.units,
+          (entry: IEvidenceEcmaScriptOwnedUnit): string => entry.root,
+        ),
         imports: new Map(
           analysis.imports.map((entry) => [entry.localName, entry]),
         ),
@@ -115,6 +137,24 @@ export class EvidenceEcmaScriptExportResolver {
     // Star exports contribute names before recursive binding resolution begins.
     // Without this fixed point, a transitive `export *` can be omitted entirely.
     this.expandStars();
+    const graph: Map<string, Set<string>> = new Map();
+    for (const module of this.modules.values()) {
+      const targets: Set<string> = new Set();
+      for (const edge of module.exports) {
+        const specifier: string | undefined =
+          edge.specifier ??
+          (edge.localName === undefined
+            ? undefined
+            : module.imports.get(edge.localName)?.specifier);
+        const target: string | undefined =
+          specifier === undefined
+            ? undefined
+            : this.target(module.source, specifier, false);
+        if (target !== undefined) targets.add(target);
+      }
+      graph.set(module.source.id, targets);
+    }
+    this.recursive = new EvidenceExportResolutionCache(graph);
   }
 
   /**
@@ -173,23 +213,27 @@ export class EvidenceEcmaScriptExportResolver {
    * omit it.
    */
   private expandStars(): void {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const module of this.modules.values())
-        for (const edge of module.exports) {
-          if (edge.kind !== "star" || edge.specifier === undefined) continue;
-          const target = this.target(module.source, edge.specifier);
-          const dependency =
-            target === undefined ? undefined : this.modules.get(target);
-          if (dependency === undefined) continue;
-          for (const name of dependency.names)
-            if (name !== "default" && !module.names.has(name)) {
-              module.names.add(name);
-              changed = true;
-            }
-        }
+    const names: Map<string, Set<string>> = new Map();
+    const subscribers: Map<string, Set<string>> = new Map();
+    for (const module of this.modules.values()) {
+      names.set(module.source.id, module.names);
+      for (const edge of module.stars) {
+        if (edge.specifier === undefined) continue;
+        const target: string | undefined = this.target(
+          module.source,
+          edge.specifier,
+        );
+        if (target === undefined) continue;
+        const entries: Set<string> = subscribers.get(target) ?? new Set();
+        entries.add(module.source.id);
+        subscribers.set(target, entries);
+      }
     }
+    propagateEvidenceNames(
+      names,
+      subscribers,
+      (name: string): boolean => name !== "default",
+    );
   }
 
   /**
@@ -226,6 +270,10 @@ export class EvidenceEcmaScriptExportResolver {
     const key = JSON.stringify([sourceId, name]);
     if (visited.has(key))
       return { bindings: [], excluded: false, cyclic: true };
+    const cacheKey: string = this.recursive.key(sourceId, key, visited);
+    const remembered: IEvidenceEcmaScriptResolution | undefined =
+      this.recursive.values.get(cacheKey);
+    if (remembered !== undefined) return remembered;
     const module = this.modules.get(sourceId);
     if (module === undefined)
       return { bindings: [], excluded: false, cyclic: false };
@@ -237,20 +285,15 @@ export class EvidenceEcmaScriptExportResolver {
     };
     // Named exports override star-export lookup; default is never provided by a
     // star export, even when the module has no explicit default edge.
-    const explicit = module.exports.filter(
-      (entry) => entry.publicName === name && entry.kind !== "star",
-    );
-    const edges =
-      explicit.length !== 0 || name === "default"
-        ? explicit
-        : module.exports.filter((entry) => entry.kind === "star");
+    const explicit: IEvidenceEcmaScriptExport[] =
+      module.explicit.get(name) ?? [];
+    const edges: IEvidenceEcmaScriptExport[] =
+      explicit.length !== 0 || name === "default" ? explicit : module.stars;
     for (const edge of edges) {
       if (edge.kind === "local" && edge.localName !== undefined) {
         const imported = module.imports.get(edge.localName);
         if (imported === undefined) {
-          const declared = module.units.some(
-            (entry) => entry.root === edge.localName,
-          );
+          const declared: boolean = module.roots.has(edge.localName);
           if (declared)
             this.addBinding(output.bindings, {
               sourceId,
@@ -354,6 +397,7 @@ export class EvidenceEcmaScriptExportResolver {
       }
     }
     visited.delete(key);
+    this.recursive.values.set(cacheKey, output);
     return output;
   }
 
@@ -393,8 +437,7 @@ export class EvidenceEcmaScriptExportResolver {
           );
       return;
     }
-    for (const owned of module.units) {
-      if (owned.root !== binding.localName) continue;
+    for (const owned of module.roots.get(binding.localName) ?? []) {
       if (binding.typeOnly && !owned.typeSpace) continue;
       const address: IEvidencePublicAddress = {
         unitId: owned.unit.id,
@@ -467,6 +510,7 @@ export class EvidenceEcmaScriptExportResolver {
   private target(
     source: IEvidenceSourceFile,
     specifier: string,
+    report: boolean = true,
   ): string | undefined {
     const key = JSON.stringify([source.id, specifier]);
     if (this.targets.has(key)) return this.targets.get(key);
@@ -500,6 +544,7 @@ export class EvidenceEcmaScriptExportResolver {
         }
     }
     const target = found.size === 1 ? Array.from(found)[0] : undefined;
+    if (!report) return target;
     const escaped = found.size === 0 && outside;
     if (escaped)
       this.problem(
@@ -600,6 +645,7 @@ export class EvidenceEcmaScriptExportResolver {
       (file: string): string => this.locationKey(file),
     );
   }
+
   /**
    * Records one export-resolution failure and marks the inventory incomplete.
    *

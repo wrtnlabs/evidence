@@ -573,6 +573,8 @@ Exit 0 is a complete analysis without errors, 1 is a complete analysis with viol
 
 Use `--only` with one or more targets printed by `evidence list`, using the same addressing rules as `evidence inspect`. Markdown targets are relative to the configured reference root; programming targets are relative to `--cwd`. Prisma and Swagger retain their artifact-specific target forms.
 
+Focused checks use the complete analysis before selecting their results, because duplicate evidence, shared annotations and review freshness can depend on other units. `inspect` retains the complete check diagnostics. Reuse an `EvidenceQuery` instance to inspect several targets from one captured analysis; its address and fingerprint indexes are shared across queries, and returned reports remain independent copies.
+
 ```bash
 npx @wrtnlabs/evidence --only requirements.md#pricing requirements.md#refund
 npx @wrtnlabs/evidence check --only requirements.md#pricing --shallow

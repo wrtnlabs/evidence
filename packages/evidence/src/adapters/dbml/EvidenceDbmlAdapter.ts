@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import typia from "typia";
 
 import { EvidenceInventoryMerge } from "../../internal/EvidenceInventoryMerge";
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceDbmlDocumentation } from "./EvidenceDbmlDocumentation";
 import { EvidenceParser } from "../../parsers/EvidenceParser";
 import { EvidenceParserError } from "../../parsers/EvidenceParserError";
@@ -115,7 +115,7 @@ export class EvidenceDbmlAdapter implements IEvidenceAdapter<"dbml"> {
       this.relations(inventory, analyses, aliases);
       this.units(inventory, analyses, aliases);
       this.documentation(inventory, analyses);
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
     } finally {
       await parser.close();
     }

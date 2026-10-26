@@ -51,6 +51,15 @@ export interface IEvidenceEcmaScriptModule {
    */
   exports: IEvidenceEcmaScriptExport[];
 
+  /** Explicit edges grouped by public name in authored order. */
+  explicit: Map<string, IEvidenceEcmaScriptExport[]>;
+
+  /** Star edges in authored order. */
+  stars: IEvidenceEcmaScriptExport[];
+
+  /** Owned units grouped by their lexical root. */
+  roots: Map<string, IEvidenceEcmaScriptOwnedUnit[]>;
+
   /**
    * Imported bindings keyed by their local identifier.
    *

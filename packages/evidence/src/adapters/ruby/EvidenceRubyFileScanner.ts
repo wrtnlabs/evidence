@@ -37,6 +37,13 @@ import { EvidenceSourceText } from "../../internal/EvidenceSourceText";
  * @evidence contracts/performance.md#bound-retention-and-release-resources The scanner copies names and ranges into node-free records before the parse session closes.
  */
 export class EvidenceRubyFileScanner {
+  /** Prior method definitions grouped by exact owner, side and runtime name. */
+  private readonly methods: Map<string, IEvidenceRubyDeclaration[]> = new Map();
+
+  /** Prior nominal and constant declarations grouped by exact identity. */
+  private readonly constants: Map<string, IEvidenceRubyDeclaration[]> =
+    new Map();
+
   /**
    * Heredoc bodies paired with their opening syntax positions.
    *
@@ -1111,13 +1118,8 @@ export class EvidenceRubyFileScanner {
     call: EvidenceNode,
   ): void {
     const key = this.identityKey(identity);
-    const candidates = this.declarations.filter(
-      (declaration) =>
-        (declaration.form === "class" ||
-          declaration.form === "module" ||
-          declaration.form === "constant") &&
-        this.identityKey(declaration.identity) === key,
-    );
+    const candidates: IEvidenceRubyDeclaration[] =
+      this.constants.get(key) ?? [];
     if (candidates.length === 0) {
       this.problem(
         "ruby-constant-visibility-target",
@@ -1143,14 +1145,8 @@ export class EvidenceRubyFileScanner {
     side: EvidenceRubyMethodSide,
     runtimeName: string,
   ): IEvidenceRubyDeclaration[] {
-    const owner = this.identityKey(ownerIdentity);
-    return this.declarations.filter(
-      (declaration) =>
-        declaration.definition &&
-        declaration.side === side &&
-        declaration.runtimeName === runtimeName &&
-        this.identityKey(declaration.ownerIdentity ?? []) === owner &&
-        (declaration.symbol === "function" || declaration.form === "attribute"),
+    return (
+      this.methods.get(JSON.stringify([ownerIdentity, side, runtimeName])) ?? []
     );
   }
 
@@ -1214,6 +1210,25 @@ export class EvidenceRubyFileScanner {
       ...(superclass === undefined ? {} : { superclass }),
     };
     this.declarations.push(declaration);
+    if (
+      declaration.definition &&
+      (declaration.symbol === "function" || declaration.form === "attribute")
+    ) {
+      const key: string = JSON.stringify([
+        declaration.ownerIdentity ?? [],
+        declaration.side,
+        declaration.runtimeName,
+      ]);
+      const entries: IEvidenceRubyDeclaration[] = this.methods.get(key) ?? [];
+      entries.push(declaration);
+      this.methods.set(key, entries);
+    }
+    if (["class", "module", "constant"].includes(declaration.form)) {
+      const key: string = this.identityKey(declaration.identity);
+      const entries: IEvidenceRubyDeclaration[] = this.constants.get(key) ?? [];
+      entries.push(declaration);
+      this.constants.set(key, entries);
+    }
     if (documentation !== undefined)
       this.attach(documentation, declaration.id, site.id);
     return declaration;

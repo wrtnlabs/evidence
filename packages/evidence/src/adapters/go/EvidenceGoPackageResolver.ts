@@ -1,3 +1,4 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
 import type { IEvidencePublicAddress } from "../../structures/IEvidencePublicAddress";
 import type { IEvidenceUnit } from "../../structures/IEvidenceUnit";
@@ -208,8 +209,7 @@ export class EvidenceGoPackageResolver {
         `${identityKey}:duplicate`,
       );
       for (const site of declaration.sites)
-        if (!unit.sites.some((candidate) => candidate.id === site.id))
-          unit.sites.push(structuredClone(site));
+        EvidenceUnitSites.append(unit, site);
     }
     this.publishAddresses(entry, owners);
   }

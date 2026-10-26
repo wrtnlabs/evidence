@@ -3,7 +3,7 @@ import path from "node:path";
 
 import typia from "typia";
 
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceSourceLoader } from "../../loaders/EvidenceSourceLoader";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
 import type { IEvidenceRemoteSwaggerSource } from "./IEvidenceRemoteSwaggerSource";
@@ -74,7 +74,7 @@ export class EvidenceSwaggerAdapter implements IEvidenceAdapter<"swagger"> {
     const input = structuredClone(typia.assert(snapshot));
     const inventory = this.inventory(input);
     if (input.files.length === 0)
-      return new EvidenceInventory([inventory]).snapshot();
+      return new EvidenceInventoryIndex([inventory]).snapshot();
 
     // Keep every document's outcome: one failed normalization must not discard
     // useful diagnostics from peers or be interpreted as an empty operation set.
@@ -97,7 +97,7 @@ export class EvidenceSwaggerAdapter implements IEvidenceAdapter<"swagger"> {
         });
       } else this.materialize(inventory, source, entry.value.operations);
     });
-    return new EvidenceInventory([inventory]).snapshot();
+    return new EvidenceInventoryIndex([inventory]).snapshot();
   }
 
   /**
@@ -311,7 +311,7 @@ export class EvidenceSwaggerAdapter implements IEvidenceAdapter<"swagger"> {
    * cannot be mistaken for a complete Swagger document.
    */
   private failure(file: string, message: string): IEvidenceInventory {
-    return new EvidenceInventory([
+    return new EvidenceInventoryIndex([
       {
         schemaVersion: 1,
         sources: [],

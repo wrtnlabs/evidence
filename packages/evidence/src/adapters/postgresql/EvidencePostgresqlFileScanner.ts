@@ -1,3 +1,4 @@
+import { lowerEvidenceOffset } from "../../internal/lowerEvidenceOffset";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
@@ -544,6 +545,9 @@ export class EvidencePostgresqlFileScanner {
    * carriers.
    */
   private comments(): void {
+    const offsets: number[] = Array.from(this.nodes.keys()).sort(
+      (left: number, right: number): number => left - right,
+    );
     const comments = this.session.root.descendantsOfType([
       "comment",
       "marginalia",
@@ -574,9 +578,8 @@ export class EvidencePostgresqlFileScanner {
         last = next;
         ++index;
       }
-      const next = Array.from(this.nodes.keys())
-        .filter((offset) => offset >= last.endIndex)
-        .sort((a, b) => a - b)[0];
+      const next: number | undefined =
+        offsets[lowerEvidenceOffset(offsets, last.endIndex)];
       const attached =
         next !== undefined &&
         standalone &&

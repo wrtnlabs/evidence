@@ -1,3 +1,4 @@
+import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import path from "node:path";
 
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
@@ -30,15 +31,27 @@ import { EvidenceSourcePath } from "../../internal/EvidenceSourcePath";
  * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources The resolver writes into the inventory and keeps only per-call graph maps.
  */
 export class EvidenceRustModuleResolver {
+  /** Inline module declarations by source, lexical path and name. */
+  private readonly inlineDeclarations: Map<string, IEvidenceRustDeclaration> =
+    new Map();
+
+  /** Selected analyses indexed by stable source identity. */
+  private readonly sourceAnalyses: Map<string, IEvidenceRustFileAnalysis> =
+    new Map();
   private readonly declarations = new Map<
     string,
     IEvidenceRustLocatedDeclaration
   >();
+
+  /** Direct owned declarations in their original placement order. */
+  private readonly owned: Map<string, IEvidenceRustLocatedDeclaration[]> =
+    new Map();
   private readonly childModules = new Map<string, IEvidenceRustModuleRecord>();
   private readonly exports = new Map<
     string,
     Map<string, IEvidenceRustExportRecord[]>
   >();
+
   /**
    * Forwarded dependency names known without enrolling dependency declarations.
    *
@@ -83,7 +96,22 @@ export class EvidenceRustModuleResolver {
   public constructor(
     private readonly analyses: IEvidenceRustFileAnalysis[],
     private readonly inventory: IEvidenceInventory,
-  ) {}
+  ) {
+    for (const analysis of analyses) {
+      if (!this.sourceAnalyses.has(analysis.source.id))
+        this.sourceAnalyses.set(analysis.source.id, analysis);
+      for (const declaration of analysis.declarations)
+        if (declaration.form === "module") {
+          const key: string = JSON.stringify([
+            analysis.source.id,
+            declaration.modulePath,
+            declaration.name,
+          ]);
+          if (!this.inlineDeclarations.has(key))
+            this.inlineDeclarations.set(key, declaration);
+        }
+    }
+  }
 
   /**
    * Resolves all selected Rust analyses and publishes their public units.
@@ -105,6 +133,14 @@ export class EvidenceRustModuleResolver {
     this.placeFiles();
     this.attachExternalInnerDocumentation();
     this.buildModules();
+    for (const located of this.declarations.values()) {
+      const owner: string | undefined = located.declaration.ownerDeclarationId;
+      if (owner === undefined) continue;
+      const entries: IEvidenceRustLocatedDeclaration[] =
+        this.owned.get(owner) ?? [];
+      entries.push(located);
+      this.owned.set(owner, entries);
+    }
     this.buildExports();
     this.resolveImplementations();
     const occurrences = this.collectOccurrences();
@@ -175,9 +211,8 @@ export class EvidenceRustModuleResolver {
       }
     for (const [sourceId, owners] of claims)
       if (owners.length > 1) {
-        const target = this.analyses.find(
-          (analysis) => analysis.source.id === sourceId,
-        );
+        const target: IEvidenceRustFileAnalysis | undefined =
+          this.sourceAnalyses.get(sourceId);
         this.problem(
           "rust-module-ownership",
           target,
@@ -754,11 +789,12 @@ export class EvidenceRustModuleResolver {
     roots: Map<string, IEvidenceRustFilePlacement>,
   ): void {
     const owner = occurrence.located;
-    const direct = Array.from(this.declarations.values()).filter(
-      (located) =>
-        located.declaration.ownerDeclarationId === owner.declaration.id &&
-        (located.declaration.visibility === "public" ||
-          located.declaration.visibility === "implicit"),
+    const direct: IEvidenceRustLocatedDeclaration[] = (
+      this.owned.get(owner.declaration.id) ?? []
+    ).filter(
+      (located: IEvidenceRustLocatedDeclaration): boolean =>
+        located.declaration.visibility === "public" ||
+        located.declaration.visibility === "implicit",
     );
     for (const member of direct)
       this.materializeMember(
@@ -897,10 +933,7 @@ export class EvidenceRustModuleResolver {
         ...(parentId === undefined ? {} : { parentId }),
       };
       this.units.set(id, unit);
-    } else if (
-      !unit.sites.some((site) => site.id === located.declaration.site.id)
-    )
-      unit.sites.push(structuredClone(located.declaration.site));
+    } else EvidenceUnitSites.append(unit, located.declaration.site);
     this.published.set(located.declaration.id, id);
     return unit;
   }
@@ -1075,11 +1108,8 @@ export class EvidenceRustModuleResolver {
   ): IEvidenceRustDeclaration | undefined {
     const name = module.localPath.at(-1);
     const parent = module.localPath.slice(0, -1);
-    return module.placement.analysis.declarations.find(
-      (declaration) =>
-        declaration.form === "module" &&
-        declaration.name === name &&
-        JSON.stringify(declaration.modulePath) === JSON.stringify(parent),
+    return this.inlineDeclarations.get(
+      JSON.stringify([module.placement.analysis.source.id, parent, name]),
     );
   }
 

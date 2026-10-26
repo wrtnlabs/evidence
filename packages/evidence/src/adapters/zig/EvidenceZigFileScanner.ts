@@ -32,6 +32,13 @@ export class EvidenceZigFileScanner {
    * session closes and later reconciliation merges aliases into canonical
    * units.
    */
+  /** Lexical names indexed per live parse-session scope. */
+  private readonly scopeNames: Map<number, Map<string, EvidenceNode[]>> =
+    new Map();
+
+  /** First triple-slash carrier ending at an adjacent sibling boundary. */
+  private readonly documentationEnds: Map<number, IEvidenceZigDocumentation> =
+    new Map();
   private readonly declarations: IEvidenceZigDeclaration[] = [];
 
   /**
@@ -214,18 +221,7 @@ export class EvidenceZigFileScanner {
       return undefined;
     }
     const name = this.name(nameNode);
-    const duplicates = scope.namedChildren.filter((child) => {
-      const candidate =
-        child.childForFieldName("name") ??
-        (child.type === "variable_declaration"
-          ? child.namedChildren.find((part) => part.type === "identifier")
-          : undefined);
-      return (
-        candidate !== null &&
-        candidate !== undefined &&
-        this.name(candidate) === name
-      );
-    });
+    const duplicates: EvidenceNode[] = this.named(scope, name);
     if (duplicates.length > 1)
       this.problem(
         "duplicate-name",
@@ -244,16 +240,11 @@ export class EvidenceZigFileScanner {
       node.children.some((child) => child.text === "const") &&
       initializer?.type === "identifier"
     ) {
-      const matches = scope.namedChildren.filter(
-        (child) =>
-          ["variable_declaration", "function_declaration"].includes(
-            child.type,
-          ) &&
-          this.sameName(
-            child.childForFieldName("name") ??
-              child.namedChildren.find((part) => part.type === "identifier"),
-            initializer,
-          ),
+      const matches: EvidenceNode[] = this.named(
+        scope,
+        this.name(initializer),
+      ).filter((child: EvidenceNode): boolean =>
+        ["variable_declaration", "function_declaration"].includes(child.type),
       );
       const target = matches[0];
       if (matches.length !== 1 || target === undefined) {
@@ -472,16 +463,11 @@ export class EvidenceZigFileScanner {
       return match !== null && match[1] !== "root";
     }
     if (node.type === "identifier") {
-      const declaration: EvidenceNode | undefined = scope.namedChildren.find(
-        (child: EvidenceNode): boolean =>
-          child.type === "variable_declaration" &&
-          this.sameName(
-            child.childForFieldName("name") ??
-              child.namedChildren.find(
-                (part: EvidenceNode): boolean => part.type === "identifier",
-              ),
-            node,
-          ),
+      const declaration: EvidenceNode | undefined = this.named(
+        scope,
+        this.name(node),
+      ).find(
+        (child: EvidenceNode): boolean => child.type === "variable_declaration",
       );
       const initializer: EvidenceNode | undefined =
         declaration === undefined ? undefined : this.initializer(declaration);
@@ -517,13 +503,11 @@ export class EvidenceZigFileScanner {
     if (node.type !== "identifier" || visited.has(node.startIndex))
       return false;
     visited.add(node.startIndex);
-    const target = scope.namedChildren.find(
-      (child) =>
-        child.type === "variable_declaration" &&
-        this.sameName(
-          child.namedChildren.find((part) => part.type === "identifier"),
-          node,
-        ),
+    const target: EvidenceNode | undefined = this.named(
+      scope,
+      this.name(node),
+    ).find(
+      (child: EvidenceNode): boolean => child.type === "variable_declaration",
     );
     const initializer =
       target === undefined ? undefined : this.initializer(target);
@@ -555,13 +539,11 @@ export class EvidenceZigFileScanner {
     if (initializer === undefined) return false;
     if (VALUE_FORMS.has(initializer.type)) return true;
     if (initializer.type !== "identifier") return false;
-    const matches = scope.namedChildren.filter(
-      (child) =>
-        child.type === "variable_declaration" &&
-        this.sameName(
-          child.namedChildren.find((part) => part.type === "identifier"),
-          initializer,
-        ),
+    const matches: EvidenceNode[] = this.named(
+      scope,
+      this.name(initializer),
+    ).filter(
+      (child: EvidenceNode): boolean => child.type === "variable_declaration",
     );
     const target = matches[0];
     return (
@@ -629,23 +611,6 @@ export class EvidenceZigFileScanner {
   }
 
   /**
-   * Compares bare and quoted spellings by their decoded Zig identifier.
-   *
-   * Alias lookup therefore treats a literal identifier and its supported quoted
-   * source spelling as the same declaration name within one lexical container.
-   */
-  private sameName(
-    left: EvidenceNode | null | undefined,
-    right: EvidenceNode,
-  ): boolean {
-    return (
-      left !== undefined &&
-      left !== null &&
-      this.name(left) === this.name(right)
-    );
-  }
-
-  /**
    * Decodes literal Zig identifiers while preserving dots as one accessor
    * segment.
    *
@@ -693,11 +658,8 @@ export class EvidenceZigFileScanner {
       )
     )
       return;
-    const documentation = [...this.documentation.values()].find(
-      (item) =>
-        item.range.end.offset === previous.endIndex &&
-        item.syntax.opening === "///",
-    );
+    const documentation: IEvidenceZigDocumentation | undefined =
+      this.documentationEnds.get(previous.endIndex);
     if (documentation === undefined) return;
     if (
       !documentation.attachments.some(
@@ -757,7 +719,7 @@ export class EvidenceZigFileScanner {
         : node.text.startsWith("//!")
           ? "//!"
           : "//";
-      this.documentation.set(node.startIndex, {
+      const documentation: IEvidenceZigDocumentation = {
         id: `zig:${this.source.id}:documentation:${node.startIndex}`,
         range: {
           start: this.session.range(node).start,
@@ -771,8 +733,40 @@ export class EvidenceZigFileScanner {
           allowWithdrawal: doc,
         },
         attachments: [],
-      });
+      };
+      this.documentation.set(node.startIndex, documentation);
+      if (opening === "///" && !this.documentationEnds.has(end.endIndex))
+        this.documentationEnds.set(end.endIndex, documentation);
     }
+  }
+
+  /**
+   * Indexes declaration names once per scope without collapsing duplicate
+   * candidates.
+   */
+  private named(scope: EvidenceNode, name: string): EvidenceNode[] {
+    let names: Map<string, EvidenceNode[]> | undefined = this.scopeNames.get(
+      scope.id,
+    );
+    if (names === undefined) {
+      names = new Map();
+      for (const child of scope.namedChildren) {
+        const candidate: EvidenceNode | null | undefined =
+          child.childForFieldName("name") ??
+          (child.type === "variable_declaration"
+            ? child.namedChildren.find(
+                (part: EvidenceNode): boolean => part.type === "identifier",
+              )
+            : undefined);
+        if (candidate === undefined || candidate === null) continue;
+        const key: string = this.name(candidate);
+        const entries: EvidenceNode[] = names.get(key) ?? [];
+        entries.push(child);
+        names.set(key, entries);
+      }
+      this.scopeNames.set(scope.id, names);
+    }
+    return names.get(name) ?? [];
   }
 
   /**

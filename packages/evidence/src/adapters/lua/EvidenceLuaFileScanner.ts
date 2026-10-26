@@ -1,3 +1,4 @@
+import type { IEvidenceLuaDeferredFinding } from "./IEvidenceLuaDeferredFinding";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
 import { EvidenceSourceText } from "../../internal/EvidenceSourceText";
@@ -25,6 +26,12 @@ import type { IEvidenceLuaValue } from "./IEvidenceLuaValue";
  * @evidence contracts/performance.md#bound-retention-and-release-resources The scanner copies names and ranges into node-free records before the parse session closes.
  */
 export class EvidenceLuaFileScanner {
+  /** Earliest preceding local declaration boundary per block and identifier. */
+  private readonly localBindings: Map<number, Map<string, number>> = new Map();
+
+  /** Parameter identifiers indexed once per function scope. */
+  private readonly parameters: Map<number, Set<string>> = new Map();
+
   /**
    * Stores chunk-level bindings, including private local values.
    *
@@ -494,74 +501,122 @@ export class EvidenceLuaFileScanner {
    * public tables incomplete.
    */
   private deferredMutations(): void {
-    for (const fn of this.session.root.descendantsOfType([
-      "function_declaration",
-      "function_definition",
-    ])) {
-      const body = fn.childForFieldName("body");
-      if (body === null) continue;
-      for (const assignment of body.descendantsOfType("assignment_statement")) {
-        const values = assignment.namedChildren.find(
-          (child) => child.type === "expression_list",
-        );
-        if (values !== undefined && this.tableReferences(values, assignment))
-          this.problem(
-            assignment,
-            "A deferred alias can mutate an exported table; assignment alias flow is outside static module initialization.",
-          );
-        if (assignment.parent?.type === "variable_declaration") continue;
-        const names = assignment.namedChildren.find(
-          (child) => child.type === "variable_list",
-        );
-        for (const name of names?.namedChildren ?? []) {
-          if (name.type === "comment") continue;
-          const root =
-            name.descendantsOfType("identifier")[0]?.text ?? name.text;
-          if (this.local(root, assignment)) continue;
+    const findings: Map<number, IEvidenceLuaDeferredFinding[]> = new Map();
+    /**
+     * Associates a finding with exactly the enclosing function bodies that
+     * originally visited it.
+     */
+    function record(
+      node: EvidenceNode,
+      message: string,
+      category: number,
+    ): void {
+      let parent: EvidenceNode | null = node.parent;
+      while (parent !== null) {
+        if (
+          parent.type === "function_declaration" ||
+          parent.type === "function_definition"
+        ) {
+          const body: EvidenceNode | null = parent.childForFieldName("body");
           if (
-            this.bindings.get(root)?.declaration !== undefined ||
-            root === "self" ||
-            root === "_G" ||
-            root === "_ENV" ||
-            !this.bindings.has(root)
-          )
-            this.problem(
-              assignment,
-              "A function writes a public or unresolved binding; deferred export mutation requires runtime analysis.",
-            );
+            body !== null &&
+            node.startIndex >= body.startIndex &&
+            node.endIndex <= body.endIndex
+          ) {
+            const entries: IEvidenceLuaDeferredFinding[] =
+              findings.get(parent.id) ?? [];
+            entries.push({ node, message, category });
+            findings.set(parent.id, entries);
+          }
         }
+        parent = parent.parent;
       }
-      for (const returned of body.descendantsOfType("return_statement"))
-        if (this.tableReferences(returned, returned))
-          this.problem(
-            returned,
-            "A function returns an exported table and creates deferred aliases; only the final chunk module return is supported.",
-          );
-      for (const declaration of body.descendantsOfType(
-        "function_declaration",
-      )) {
-        if (declaration.children.some((child) => child.type === "local"))
-          continue;
-        const name = declaration.childForFieldName("name");
-        const root =
-          name === null
-            ? undefined
-            : (name.descendantsOfType("identifier")[0]?.text ?? name.text);
-        if (root !== undefined && !this.local(root, declaration))
-          this.problem(
-            declaration,
-            "A deferred function declaration changes an external table or global binding.",
-          );
-      }
-      for (const call of body.descendantsOfType("function_call")) {
-        const args = call.childForFieldName("arguments");
-        if (args !== null && this.tableReferences(args, call))
-          this.problem(
-            call,
-            "An exported table escapes to a function call that may mutate its surface.",
+    }
+    for (const assignment of this.session.root.descendantsOfType(
+      "assignment_statement",
+    )) {
+      const values: EvidenceNode | undefined = assignment.namedChildren.find(
+        (child: EvidenceNode): boolean => child.type === "expression_list",
+      );
+      if (values !== undefined && this.tableReferences(values, assignment))
+        record(
+          assignment,
+          "A deferred alias can mutate an exported table; assignment alias flow is outside static module initialization.",
+          0,
+        );
+      if (assignment.parent?.type === "variable_declaration") continue;
+      const names: EvidenceNode | undefined = assignment.namedChildren.find(
+        (child: EvidenceNode): boolean => child.type === "variable_list",
+      );
+      for (const name of names?.namedChildren ?? []) {
+        if (name.type === "comment") continue;
+        const root: string =
+          name.descendantsOfType("identifier")[0]?.text ?? name.text;
+        if (this.local(root, assignment)) continue;
+        if (
+          this.bindings.get(root)?.declaration !== undefined ||
+          root === "self" ||
+          root === "_G" ||
+          root === "_ENV" ||
+          !this.bindings.has(root)
+        )
+          record(
+            assignment,
+            "A function writes a public or unresolved binding; deferred export mutation requires runtime analysis.",
+            0,
           );
       }
     }
+    for (const returned of this.session.root.descendantsOfType(
+      "return_statement",
+    ))
+      if (this.tableReferences(returned, returned))
+        record(
+          returned,
+          "A function returns an exported table and creates deferred aliases; only the final chunk module return is supported.",
+          1,
+        );
+    const functions: EvidenceNode[] = this.session.root.descendantsOfType([
+      "function_declaration",
+      "function_definition",
+    ]);
+    for (const declaration of functions) {
+      if (
+        declaration.type !== "function_declaration" ||
+        declaration.children.some(
+          (child: EvidenceNode): boolean => child.type === "local",
+        )
+      )
+        continue;
+      const name: EvidenceNode | null = declaration.childForFieldName("name");
+      const root: string | undefined =
+        name === null
+          ? undefined
+          : (name.descendantsOfType("identifier")[0]?.text ?? name.text);
+      if (root !== undefined && !this.local(root, declaration))
+        record(
+          declaration,
+          "A deferred function declaration changes an external table or global binding.",
+          2,
+        );
+    }
+    for (const call of this.session.root.descendantsOfType("function_call")) {
+      const args: EvidenceNode | null = call.childForFieldName("arguments");
+      if (args !== null && this.tableReferences(args, call))
+        record(
+          call,
+          "An exported table escapes to a function call that may mutate its surface.",
+          3,
+        );
+    }
+    for (const fn of functions)
+      for (const finding of (findings.get(fn.id) ?? []).sort(
+        (
+          left: IEvidenceLuaDeferredFinding,
+          right: IEvidenceLuaDeferredFinding,
+        ): number => left.category - right.category,
+      ))
+        this.problem(finding.node, finding.message);
   }
 
   /**
@@ -617,36 +672,58 @@ export class EvidenceLuaFileScanner {
       if (
         ["function_declaration", "function_definition"].includes(scope.type)
       ) {
-        const parameters = scope.childForFieldName("parameters");
-        if (
-          parameters !== null &&
-          parameters.namedChildren.some(
-            (child) => child.type === "identifier" && child.text === name,
-          )
-        )
-          return true;
-      }
-      if (scope.type === "block")
-        for (const declaration of scope.namedChildren) {
-          if (declaration.startIndex >= node.startIndex) break;
-          if (declaration.type === "variable_declaration") {
-            if (declaration.endIndex > node.startIndex) continue;
-            const names = declaration.descendantsOfType("variable_list")[0];
-            if (
-              names !== undefined &&
-              names.namedChildren.some(
-                (child) => child.type === "identifier" && child.text === name,
+        let parameters: Set<string> | undefined = this.parameters.get(scope.id);
+        if (parameters === undefined) {
+          parameters = new Set(
+            (scope.childForFieldName("parameters")?.namedChildren ?? [])
+              .filter(
+                (entry: EvidenceNode): boolean => entry.type === "identifier",
               )
-            )
-              return true;
-          }
-          if (
-            declaration.type === "function_declaration" &&
-            declaration.children.some((child) => child.type === "local") &&
-            declaration.childForFieldName("name")?.text === name
-          )
-            return true;
+              .map((entry: EvidenceNode): string => entry.text),
+          );
+          this.parameters.set(scope.id, parameters);
         }
+        if (parameters.has(name)) return true;
+      }
+      if (scope.type === "block") {
+        let locals: Map<string, number> | undefined = this.localBindings.get(
+          scope.id,
+        );
+        if (locals === undefined) {
+          locals = new Map();
+          for (const declaration of scope.namedChildren) {
+            const names: EvidenceNode[] =
+              declaration.type === "variable_declaration"
+                ? (
+                    declaration.descendantsOfType("variable_list")[0]
+                      ?.namedChildren ?? []
+                  ).filter(
+                    (entry: EvidenceNode): boolean =>
+                      entry.type === "identifier",
+                  )
+                : declaration.type === "function_declaration" &&
+                    declaration.children.some(
+                      (entry: EvidenceNode): boolean => entry.type === "local",
+                    )
+                  ? [declaration.childForFieldName("name")].filter(
+                      (entry: EvidenceNode | null): entry is EvidenceNode =>
+                        entry !== null,
+                    )
+                  : [];
+            const boundary: number =
+              declaration.type === "variable_declaration"
+                ? declaration.endIndex
+                : declaration.startIndex + 1;
+            for (const entry of names)
+              locals.set(
+                entry.text,
+                Math.min(locals.get(entry.text) ?? Infinity, boundary),
+              );
+          }
+          this.localBindings.set(scope.id, locals);
+        }
+        if ((locals.get(name) ?? Infinity) <= node.startIndex) return true;
+      }
       scope = scope.parent;
     }
     return false;

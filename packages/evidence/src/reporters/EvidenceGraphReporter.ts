@@ -1,3 +1,4 @@
+import { groupEvidenceRecords } from "../internal/groupEvidenceRecords";
 import type { IEvidenceGraphBoundary } from "../structures/IEvidenceGraphBoundary";
 import type { IEvidenceGraphExportEdge } from "../structures/IEvidenceGraphExportEdge";
 import type { IEvidenceGraphExportReview } from "../structures/IEvidenceGraphExportReview";
@@ -78,14 +79,16 @@ export namespace EvidenceGraphReporter {
    */
   export function mermaid(report: IEvidenceGraphReport): string {
     const names = nodeNames(report.nodes);
+    const grouped: Map<string, EvidenceGraphNode[]> = groupEvidenceRecords(
+      report.nodes,
+      (node: EvidenceGraphNode): string => node.boundaryId,
+    );
     const lines: string[] = ["flowchart LR"];
     report.boundaries.forEach((entry, index) => {
       lines.push(
         `  subgraph b${index}["${mermaidText(boundaryLabel(entry))}"]`,
       );
-      for (const node of report.nodes.filter(
-        (candidate) => candidate.boundaryId === entry.id,
-      ))
+      for (const node of grouped.get(entry.id) ?? [])
         lines.push(
           `    ${requireNodeName(names, node.id)}["${mermaidText(nodeLabel(node))}"]`,
         );
@@ -121,15 +124,17 @@ export namespace EvidenceGraphReporter {
    */
   export function dot(report: IEvidenceGraphReport): string {
     const names = nodeNames(report.nodes);
+    const grouped: Map<string, EvidenceGraphNode[]> = groupEvidenceRecords(
+      report.nodes,
+      (node: EvidenceGraphNode): string => node.boundaryId,
+    );
     const lines: string[] = ["digraph Evidence {", "  rankdir=LR;"];
     report.boundaries.forEach((entry, index) => {
       lines.push(
         `  subgraph cluster_${index} {`,
         `    label="${dotText(boundaryLabel(entry))}";`,
       );
-      for (const node of report.nodes.filter(
-        (candidate) => candidate.boundaryId === entry.id,
-      ))
+      for (const node of grouped.get(entry.id) ?? [])
         lines.push(
           `    ${requireNodeName(names, node.id)} [label="${dotText(nodeLabel(node))}"];`,
         );

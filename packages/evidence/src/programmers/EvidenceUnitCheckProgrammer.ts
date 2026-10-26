@@ -1,8 +1,9 @@
+import { EvidenceQueryInventoryIndex } from "../internal/EvidenceQueryInventoryIndex";
+import type { IEvidenceQueryResolution } from "../internal/IEvidenceQueryResolution";
 import type { EvidenceQueryPopulationContext } from "../contexts/EvidenceQueryPopulationContext";
 import type { IEvidenceQueryContext } from "../contexts/IEvidenceQueryContext";
 import { EvidenceInventoryMerge } from "../internal/EvidenceInventoryMerge";
 import type { IEvidenceUnitCheckSelection } from "../internal/IEvidenceUnitCheckSelection";
-import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
 import type { IEvidenceCheckClaim } from "../structures/IEvidenceCheckClaim";
 import type { IEvidenceCheckCounts } from "../structures/IEvidenceCheckCounts";
 import type { IEvidenceCheckObligation } from "../structures/IEvidenceCheckObligation";
@@ -14,9 +15,6 @@ import type { IEvidenceGraphClaimResult } from "../structures/IEvidenceGraphClai
 import type { IEvidenceGraphClaim } from "../structures/IEvidenceGraphClaim";
 import type { IEvidenceGraphHostCoverage } from "../structures/IEvidenceGraphHostCoverage";
 import type { IEvidenceGraphObligation } from "../structures/IEvidenceGraphObligation";
-import type { IEvidenceInspection } from "../structures/IEvidenceInspection";
-import type { IEvidenceInspectReport } from "../structures/IEvidenceInspectReport";
-import type { IEvidenceInspectedUnit } from "../structures/IEvidenceInspectedUnit";
 import type { IEvidenceUnit } from "../structures/IEvidenceUnit";
 import { EvidenceQueryProgrammer } from "./EvidenceQueryProgrammer";
 import { EvidenceCheckProgrammer } from "./EvidenceCheckProgrammer";
@@ -62,7 +60,22 @@ export namespace EvidenceUnitCheckProgrammer {
   ): Promise<IEvidenceCheckReport> {
     if (targets.length === 0)
       throw new Error("Focused checks require at least one target.");
-    const { analysis, populations }: IEvidenceQueryContext = context;
+    const { analysis }: IEvidenceQueryContext = context;
+    const inputs: Map<number, IEvidenceGraphClaim> = new Map(
+      analysis.graphInput.claims.map(
+        (
+          claim: IEvidenceGraphClaim,
+          position: number,
+        ): [number, IEvidenceGraphClaim] => [claim.index ?? position, claim],
+      ),
+    );
+    const results: Map<number, IEvidenceGraphClaimResult> = new Map(
+      analysis.graph.claims.map(
+        (
+          claim: IEvidenceGraphClaimResult,
+        ): [number, IEvidenceGraphClaimResult] => [claim.claim, claim],
+      ),
+    );
     const selections: Map<string, IEvidenceUnitCheckSelection> = new Map();
     const failures: IEvidenceDiagnostic[] = [];
     let incomplete: boolean = false;
@@ -70,34 +83,28 @@ export namespace EvidenceUnitCheckProgrammer {
     // Resolve every request before deriving the outcome. A good target beside a
     // typo or an uncertain repeated boundary must not hide the failed request.
     for (const target of targets) {
-      const inspected: IEvidenceInspectReport =
-        await EvidenceQueryProgrammer.inspect(context, target);
-      const resolved: IEvidenceInspection[] = inspected.inspections.filter(
-        (inspection: IEvidenceInspection): boolean =>
-          inspection.status === "resolved",
+      const inspected: IEvidenceQueryResolution[] =
+        await EvidenceQueryProgrammer.resolve(context, target);
+      const resolved: IEvidenceQueryResolution[] = inspected.filter(
+        (inspection: IEvidenceQueryResolution): boolean =>
+          inspection.resolution.status === "resolved",
       );
-      const uncertain: IEvidenceInspection[] = inspected.inspections.filter(
-        (inspection: IEvidenceInspection): boolean =>
-          inspection.status === "incomplete" ||
-          inspection.status === "ambiguous",
+      const uncertain: IEvidenceQueryResolution[] = inspected.filter(
+        (inspection: IEvidenceQueryResolution): boolean =>
+          inspection.resolution.status === "incomplete" ||
+          inspection.resolution.status === "ambiguous",
       );
       let selected: boolean = false;
       for (const inspection of resolved) {
-        const population: EvidenceQueryPopulationContext | undefined =
-          populations.find(
-            (candidate: EvidenceQueryPopulationContext): boolean =>
-              key(candidate.scope.claim, candidate.scope.reference) ===
-              key(inspection.scope.claim, inspection.scope.reference),
-          );
-        if (population === undefined)
-          throw new Error("Inspected unit has no configured population.");
-        const ids: string[] = inspection.units
-          .flatMap((unit: IEvidenceInspectedUnit): string[] =>
+        const population: EvidenceQueryPopulationContext =
+          inspection.population;
+        const ids: string[] = inspection.resolution.units
+          .flatMap((unit: IEvidenceUnit): string[] =>
             shallow
-              ? population.selected.has(unit.item.unitId)
-                ? [unit.item.unitId]
+              ? population.selected.has(unit.id)
+                ? [unit.id]
                 : []
-              : [...population.selectedDescendants(unit.item.unitId)],
+              : [...population.selectedDescendants(unit.id)],
           )
           .filter((id: string): boolean => population.visible.has(id));
         if (ids.length === 0) continue;
@@ -123,8 +130,8 @@ export namespace EvidenceUnitCheckProgrammer {
       }
       if (!selected || uncertain.length !== 0) {
         incomplete ||= uncertain.some(
-          (inspection: IEvidenceInspection): boolean =>
-            inspection.status === "incomplete",
+          (inspection: IEvidenceQueryResolution): boolean =>
+            inspection.resolution.status === "incomplete",
         );
         failures.push({
           code: "check-only-target",
@@ -135,9 +142,17 @@ export namespace EvidenceUnitCheckProgrammer {
           target,
         });
         failures.push(
-          ...inspected.inspections.flatMap(
-            (inspection: IEvidenceInspection): IEvidenceDiagnostic[] =>
-              inspection.diagnostics,
+          ...inspected.flatMap(
+            (inspection: IEvidenceQueryResolution): IEvidenceDiagnostic[] =>
+              inspection.resolution.diagnostics.map(
+                (diagnostic: IEvidenceDiagnostic): IEvidenceDiagnostic => ({
+                  ...diagnostic,
+                  claim: inspection.population.scope.claim,
+                  ...(inspection.population.scope.reference === undefined
+                    ? {}
+                    : { reference: inspection.population.scope.reference }),
+                }),
+              ),
           ),
         );
       }
@@ -146,10 +161,10 @@ export namespace EvidenceUnitCheckProgrammer {
     // Project the evaluated ledger rather than reevaluating reduced inputs:
     // cardinality and review freshness depend on context outside the focus.
     for (const selection of selections.values())
-      indexSelection(analysis, selection);
+      indexSelection(inputs, selection);
     const claims: IEvidenceCheckClaim[] = analysis.report.claims.flatMap(
       (claim: IEvidenceCheckClaim): IEvidenceCheckClaim[] =>
-        projectClaim(analysis, selections, claim),
+        projectClaim(results, selections, claim),
     );
     const diagnostics: IEvidenceDiagnostic[] =
       EvidenceCheckProgrammer.orderDiagnostics(
@@ -158,7 +173,7 @@ export namespace EvidenceUnitCheckProgrammer {
             ...analysis.report.diagnostics.flatMap(
               (diagnostic: IEvidenceDiagnostic): IEvidenceDiagnostic[] =>
                 selectDiagnostic(
-                  analysis,
+                  inputs,
                   selections,
                   diagnostic,
                   includeMissingIds,
@@ -207,7 +222,7 @@ export namespace EvidenceUnitCheckProgrammer {
  * attribute refused acknowledgements that never became coverage edges.
  */
 function indexSelection(
-  analysis: IEvidenceCheckAnalysis,
+  inputs: Map<number, IEvidenceGraphClaim>,
   selection: IEvidenceUnitCheckSelection,
 ): void {
   const population: EvidenceQueryPopulationContext = selection.population;
@@ -229,19 +244,22 @@ function indexSelection(
         selection.hostIds.add(host.id);
     return;
   }
-  const claim: IEvidenceGraphClaim | undefined =
-    analysis.graphInput.claims.find(
-      (candidate: IEvidenceGraphClaim): boolean =>
-        candidate.index === population.scope.claim,
-    );
-  if (claim === undefined || population.reference === undefined)
+  const claim: IEvidenceGraphClaim | undefined = inputs.get(
+    population.scope.claim,
+  );
+  const records: EvidenceQueryInventoryIndex | undefined =
+    claim === undefined
+      ? undefined
+      : EvidenceQueryInventoryIndex.borrow(claim.inventory);
+  if (
+    claim === undefined ||
+    records === undefined ||
+    population.reference === undefined
+  )
     throw new Error("Selected reference has no owning graph input.");
   for (const entry of population.reference.resolutions) {
     const statement: IEvidenceDeclaration | undefined =
-      claim.inventory.declarations.find(
-        (candidate: IEvidenceDeclaration): boolean =>
-          candidate.id === entry.declarationId,
-      );
+      records.declarations.get(entry.declarationId);
     if (
       statement === undefined ||
       !entry.resolution.units.some((unit: IEvidenceUnit): boolean =>
@@ -250,13 +268,12 @@ function indexSelection(
     )
       continue;
     selection.statements.add(statementKey(statement.hostId, statement.target));
-    for (const host of claim.inventory.hosts)
-      if (host.id === statement.hostId)
-        for (const id of host.unitIds) selection.relatedUnitIds.add(id);
+    for (const id of records.hostIds.get(statement.hostId)?.unitIds ?? [])
+      selection.relatedUnitIds.add(id);
   }
   for (const entry of population.reference.reviewResolutions ?? []) {
-    const statement: IEvidenceReview | undefined = claim.inventory.reviews.find(
-      (candidate: IEvidenceReview): boolean => candidate.id === entry.reviewId,
+    const statement: IEvidenceReview | undefined = records.reviews.get(
+      entry.reviewId,
     );
     if (
       statement === undefined ||
@@ -299,7 +316,7 @@ function touches(
  * Independent ledgers keep their original completeness and configured indices.
  */
 function projectClaim(
-  analysis: IEvidenceCheckAnalysis,
+  results: Map<number, IEvidenceGraphClaimResult>,
   selections: Map<string, IEvidenceUnitCheckSelection>,
   claim: IEvidenceCheckClaim,
 ): IEvidenceCheckClaim[] {
@@ -312,11 +329,9 @@ function projectClaim(
         key(claim.claim, obligation.reference),
       );
       if (selection === undefined && own === undefined) return [];
-      const result: IEvidenceGraphClaimResult | undefined =
-        analysis.graph.claims.find(
-          (candidate: IEvidenceGraphClaimResult): boolean =>
-            candidate.claim === claim.claim,
-        );
+      const result: IEvidenceGraphClaimResult | undefined = results.get(
+        claim.claim,
+      );
       const ledger: IEvidenceGraphObligation | undefined =
         result === undefined
           ? undefined
@@ -357,7 +372,7 @@ function projectClaim(
  * aggregates use answer ledgers to omit unrelated missing items.
  */
 function selectDiagnostic(
-  analysis: IEvidenceCheckAnalysis,
+  inputs: Map<number, IEvidenceGraphClaim>,
   selections: Map<string, IEvidenceUnitCheckSelection>,
   diagnostic: IEvidenceDiagnostic,
   includeMissingIds: boolean,
@@ -389,30 +404,24 @@ function selectDiagnostic(
     const obligation: IEvidenceGraphObligation | undefined =
       selected.population.obligation;
     const ledger: IEvidenceGraphHostCoverage | undefined =
-      obligation === undefined
+      obligation === undefined || diagnostic.unitId === undefined
         ? undefined
-        : obligation.hostCoverage.find(
-            (host: IEvidenceGraphHostCoverage): boolean =>
-              host.hostUnitId === diagnostic.unitId,
-          );
+        : selected.population.hostCoverage.get(diagnostic.unitId);
+    const explained: Set<string> = new Set(ledger?.explainedUnitIds ?? []);
     const missing: string[] =
       ledger === undefined
         ? []
         : ledger.missingUnitIds.filter(
             (id: string): boolean =>
-              selected.unitIds.has(id) && !ledger.explainedUnitIds.includes(id),
+              selected.unitIds.has(id) && !explained.has(id),
           );
     if (missing.length === 0) return [];
-    const claim: IEvidenceGraphClaim | undefined =
-      analysis.graphInput.claims.find(
-        (candidate: IEvidenceGraphClaim): boolean =>
-          candidate.index === diagnostic.claim,
-      );
+    const claim: IEvidenceGraphClaim | undefined = inputs.get(diagnostic.claim);
     const host: IEvidenceUnit | undefined =
-      claim === undefined
+      claim === undefined || diagnostic.unitId === undefined
         ? undefined
-        : claim.inventory.units.find(
-            (unit: IEvidenceUnit): boolean => unit.id === diagnostic.unitId,
+        : EvidenceQueryInventoryIndex.borrow(claim.inventory).units.get(
+            diagnostic.unitId,
           );
     const names: string[] = missing.map(
       (id: string): string => selected.population.units.get(id)?.name ?? id,

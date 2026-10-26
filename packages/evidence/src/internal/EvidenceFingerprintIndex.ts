@@ -1,3 +1,4 @@
+import type { IEvidencePortableTrie } from "./IEvidencePortableTrie";
 import { createHash } from "node:crypto";
 
 import type { IEvidenceFingerprint } from "../structures/IEvidenceFingerprint";
@@ -31,7 +32,7 @@ type EvidencePortableReplacement = readonly [token: string, value: string];
  * @evidence contracts/common.md#clear-and-simple-design The class indexes one inventory once and memoizes digests; portable token replacement, range ordering and normalization are private helpers.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Process-local source IDs and absolute roots are replaced with checkout-stable markers, and ambiguous tokens throw rather than letting collection order choose a value.
  * @evidence contracts/common.md#meaningful-documentation The class comment explains what fingerprints exclude; every field, method and helper is documented.
- * @evidence contracts/performance.md#efficient-algorithms Construction is linear in sources, annotations and units. The portable token table is built and ordered once per index, and each unit's content digest and portable identity are computed once, so sorting a scope of n units costs O(n log n) comparisons of memoized strings.
+ * @evidence contracts/performance.md#efficient-algorithms Construction indexes sources and units once and sorts and merges A annotation ranges in O(A log A); each content span searches O(log A) before visiting only intersecting ranges. The portable literal-token trie is built once per index, and each unit's content digest and portable identity are computed once, so sorting a scope of n units costs O(n log n) comparisons of memoized strings.
  * @evidence contracts/performance.md#reuse-equivalent-work Content digests, portable identities, the token table and finished fingerprints are memoized for the lifetime of the inventory snapshot.
  * @evidence contracts/performance.md#bound-retention-and-release-resources The index references the immutable analysis inventory; its memo maps grow by at most one entry per unit plus one token table, and it is released with the owning graph evaluation.
  */
@@ -42,7 +43,8 @@ export class EvidenceFingerprintIndex {
    * Content hashing removes these mapped spans while preserving surrounding
    * semantic source text.
    */
-  private readonly annotations = new Map<string, IEvidenceSourceRange[]>();
+  private readonly annotations: Map<string, Array<readonly [number, number]>> =
+    new Map();
 
   /**
    * Structurally owned child units grouped by parent identity.
@@ -74,12 +76,12 @@ export class EvidenceFingerprintIndex {
   private readonly identities = new Map<string, string>();
 
   /**
-   * Validated, longest-first token replacements shared by every unit.
+   * Validated literal token prefix tree shared by every unit.
    *
    * Built lazily on first use because it depends only on the inventory's
    * sources; an ambiguous token still throws at that point.
    */
-  private replacements: EvidencePortableReplacement[] | undefined;
+  private replacements: IEvidencePortableTrie | undefined;
 
   /**
    * Source snapshots indexed by physical path for site content lookup.
@@ -110,10 +112,31 @@ export class EvidenceFingerprintIndex {
     for (const annotation of inventory.annotationRanges) {
       if (annotation.range === undefined) continue;
       const ranges = this.annotations.get(annotation.file) ?? [];
-      ranges.push(annotation.range);
+      ranges.push([annotation.range.start.offset, annotation.range.end.offset]);
       this.annotations.set(annotation.file, ranges);
     }
-    for (const ranges of this.annotations.values()) ranges.sort(compareRanges);
+    for (const [file, ranges] of this.annotations) {
+      ranges.sort(
+        (
+          left: readonly [number, number],
+          right: readonly [number, number],
+        ): number => {
+          const compared: number = left[0] - right[0];
+          return compared !== 0 ? compared : left[1] - right[1];
+        },
+      );
+      const merged: Array<readonly [number, number]> = [];
+      for (const range of ranges) {
+        const previous: readonly [number, number] | undefined = merged.at(-1);
+        if (previous !== undefined && range[0] <= previous[1])
+          merged[merged.length - 1] = [
+            previous[0],
+            Math.max(previous[1], range[1]),
+          ];
+        else merged.push(range);
+      }
+      this.annotations.set(file, merged);
+    }
     for (const unit of inventory.units) {
       if (this.units.has(unit.id)) continue;
       this.units.set(unit.id, unit);
@@ -244,7 +267,9 @@ export class EvidenceFingerprintIndex {
    * markers from participating in later replacements.
    */
   private portableUnitId(unit: IEvidenceUnit): string {
-    this.replacements ??= orderReplacements(this.collectReplacements());
+    this.replacements ??= indexReplacements(
+      validateReplacements(this.collectReplacements()),
+    );
     return replacePortableTokens(unit.id, this.replacements);
   }
 
@@ -377,14 +402,21 @@ export class EvidenceFingerprintIndex {
   ): string {
     let cursor = range.start.offset;
     const fragments: string[] = [];
-    for (const annotation of this.annotations.get(source.physicalPath) ?? []) {
-      if (
-        annotation.end.offset <= cursor ||
-        annotation.start.offset >= range.end.offset
-      )
-        continue;
-      const start = Math.max(cursor, annotation.start.offset);
-      const end = Math.min(range.end.offset, annotation.end.offset);
+    const annotations: Array<readonly [number, number]> =
+      this.annotations.get(source.physicalPath) ?? [];
+    let low: number = 0;
+    let high: number = annotations.length;
+    while (low < high) {
+      const middle: number = (low + high) >>> 1;
+      if ((annotations[middle]?.[1] ?? Infinity) <= cursor) low = middle + 1;
+      else high = middle;
+    }
+    for (let index: number = low; index < annotations.length; ++index) {
+      const annotation: readonly [number, number] | undefined =
+        annotations[index];
+      if (annotation === undefined || annotation[0] >= range.end.offset) break;
+      const start: number = Math.max(cursor, annotation[0]);
+      const end: number = Math.min(range.end.offset, annotation[1]);
       if (start > cursor) fragments.push(source.content.slice(cursor, start));
       cursor = Math.max(cursor, end);
     }
@@ -395,13 +427,13 @@ export class EvidenceFingerprintIndex {
 }
 
 /**
- * Validates and orders process-local tokens for longest-first replacement.
+ * Validates literal process-local tokens before prefix indexing.
  *
  * Equal tokens must agree on their stable value so source collection order
- * cannot choose a fingerprint silently. Longer tokens sort first, then tokens
- * compare bytewise for a deterministic order.
+ * cannot choose a fingerprint silently. The prefix tree decides longest matches
+ * without sorting this table.
  */
-function orderReplacements(
+function validateReplacements(
   replacements: EvidencePortableReplacement[],
 ): EvidencePortableReplacement[] {
   const unique = new Map<string, string>();
@@ -414,59 +446,65 @@ function orderReplacements(
       );
     unique.set(token, value);
   }
-  const ordered: EvidencePortableReplacement[] = Array.from(
-    unique.entries(),
-  ).sort(
-    (
-      left: EvidencePortableReplacement,
-      right: EvidencePortableReplacement,
-    ): number => {
-      const lengthDifference: number = right[0].length - left[0].length;
-      return lengthDifference !== 0
-        ? lengthDifference
-        : EvidenceInventoryMerge.compare(left[0], right[0]);
-    },
-  );
-  return ordered;
+  return Array.from(unique.entries());
 }
 
 /**
  * Replaces process-local identity tokens without revisiting generated text.
  *
- * At each original input position, the longest matching token wins. The
- * replacements must already be validated and ordered by orderReplacements.
+ * At each original input position, the longest matching token wins. The prefix
+ * tree contains validated tokens and generated text is never revisited.
  */
 function replacePortableTokens(
   input: string,
-  ordered: EvidencePortableReplacement[],
+  root: IEvidencePortableTrie,
 ): string {
-  if (ordered.length === 0) return input;
-
   let output: string = "";
   let cursor: number = 0;
+  let literal: number = 0;
   while (cursor < input.length) {
-    let selected: EvidencePortableReplacement | undefined;
-    let selectedAt: number = -1;
-    for (const candidate of ordered) {
-      const found: number = input.indexOf(candidate[0], cursor);
-      if (found < 0) continue;
-      if (
-        selected === undefined ||
-        found < selectedAt ||
-        (found === selectedAt && candidate[0].length > selected[0].length)
-      ) {
-        selected = candidate;
-        selectedAt = found;
+    let current: IEvidencePortableTrie | undefined = root;
+    let value: string | undefined;
+    let end: number = cursor;
+    for (let position: number = cursor; position < input.length; ++position) {
+      current = current.children.get(input.charAt(position));
+      if (current === undefined) break;
+      if (current.value !== undefined) {
+        value = current.value;
+        end = position + 1;
       }
     }
-    if (selected === undefined) {
-      output += input.slice(cursor);
-      break;
+    if (value === undefined) {
+      ++cursor;
+      continue;
     }
-    output += input.slice(cursor, selectedAt) + selected[1];
-    cursor = selectedAt + selected[0].length;
+    output += input.slice(literal, cursor) + value;
+    cursor = end;
+    literal = end;
   }
-  return output;
+  return output + input.slice(literal);
+}
+
+/** Builds a literal prefix index from the validated portable token table. */
+function indexReplacements(
+  ordered: EvidencePortableReplacement[],
+): IEvidencePortableTrie {
+  const root: IEvidencePortableTrie = { children: new Map() };
+  for (const [token, value] of ordered) {
+    let current: IEvidencePortableTrie = root;
+    for (let position: number = 0; position < token.length; ++position) {
+      const character: string = token.charAt(position);
+      let child: IEvidencePortableTrie | undefined =
+        current.children.get(character);
+      if (child === undefined) {
+        child = { children: new Map() };
+        current.children.set(character, child);
+      }
+      current = child;
+    }
+    current.value = value;
+  }
+  return root;
 }
 
 /**

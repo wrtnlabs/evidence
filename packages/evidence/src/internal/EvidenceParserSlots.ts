@@ -35,7 +35,10 @@ export class EvidenceParserSlots {
    *
    * Releasing a slot wakes the oldest request before reducing the active count.
    */
-  private readonly queue: (() => void)[] = [];
+  private readonly queue: Array<(() => void) | undefined> = [];
+
+  /** First live waiter; consumed slots release their resolver immediately. */
+  private head: number = 0;
 
   /**
    * Close callers waiting for the final reserved slot to be released.
@@ -69,7 +72,7 @@ export class EvidenceParserSlots {
    * count.
    */
   public get waiting(): number {
-    return this.queue.length;
+    return this.queue.length - this.head;
   }
 
   /**
@@ -108,12 +111,17 @@ export class EvidenceParserSlots {
    * @evidence contracts/common.md#clear-and-simple-design Release owns transfer and drain signaling.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Ownership transfer avoids a transient zero that close could misread.
    * @evidence contracts/common.md#meaningful-documentation The comment states the precondition and drain behavior; the inline comment explains the transfer.
-   * @evidence contracts/performance.md#efficient-algorithms O(1) apart from Array.shift on the queue.
+   * @evidence contracts/performance.md#efficient-algorithms O(1) using a head cursor with direct ownership transfer.
    * @evidenceExclude contracts/performance.md#reuse-equivalent-work Release coordinates ownership, not results.
    * @evidence contracts/performance.md#bound-retention-and-release-resources It returns the caller's slot exactly once and empties the drain list when no owner remains.
    */
   public release(): void {
-    const next = this.queue.shift();
+    const next: (() => void) | undefined = this.queue[this.head];
+    if (this.head < this.queue.length) this.queue[this.head++] = undefined;
+    if (this.head === this.queue.length) {
+      this.queue.length = 0;
+      this.head = 0;
+    }
     // Transfer ownership without lowering active: close must not observe a
     // temporary zero while an already accepted request is about to resume.
     if (next !== undefined) next();

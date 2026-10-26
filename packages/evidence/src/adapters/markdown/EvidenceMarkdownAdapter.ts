@@ -1,6 +1,6 @@
 import typia from "typia";
 
-import { EvidenceInventory } from "../../graph/EvidenceInventory";
+import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
 import { EvidenceMarkdownScanner } from "./EvidenceMarkdownScanner";
 import type { IEvidenceAdapter } from "../../structures/IEvidenceAdapter";
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
@@ -74,6 +74,6 @@ export class EvidenceMarkdownAdapter implements IEvidenceAdapter<"markdown"> {
     };
     for (const source of input.files)
       new EvidenceMarkdownScanner(inventory, source).scan();
-    return new EvidenceInventory([inventory]).snapshot();
+    return new EvidenceInventoryIndex([inventory]).snapshot();
   }
 }
