@@ -497,6 +497,12 @@ Static foreign re-exports contribute no locally owned declarations and need no d
 
 Every adapter maps its language onto `type`, `function`, and `property`, keeps undocumented public declarations in the population, and ignores tags inside code examples, strings, and ordinary comments.
 
+TypeScript and C++ namespaces, Rust modules, Dart ordinary named extensions, and Objective-C named categories are address-only `scope` records. They preserve qualified paths, aggregate citations, aliases, and inherited `@internal`, `@hidden`, or `@ignore` directives, but create no evidence obligations or claim hosts. Put evidence on their actual declarations; evidence tags on a scope report an unsupported host.
+
+A TypeScript namespace merged with a real type, a Swift extension, or an Objective-C anonymous class extension contributes source content and visibility directives without adding an evidence host. The actual type and its declared members retain their obligations. Namespace selection differs from `@ttsc/evidence`, which classifies TypeScript namespaces as types.
+
+Runtime mixin types such as Ruby modules, singleton types such as Kotlin and Scala objects, Dart `extension type` declarations, and Zig container types remain `type` declarations.
+
 <details>
 <summary><strong>Per-language addresses and boundaries</strong></summary>
 

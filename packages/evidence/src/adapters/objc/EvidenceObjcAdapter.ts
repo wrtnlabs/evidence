@@ -25,9 +25,11 @@ import { EvidenceObjcFileScanner } from "./EvidenceObjcFileScanner";
  * Interface, category, and implementation records require a shared ownership
  * model before documentation can be attributed to semantic API subjects. The
  * adapter retains each physical site while normalizing published identities and
- * preserving failures that prevent complete extraction.
+ * preserving failures that prevent complete extraction. Categories provide
+ * address scopes, and anonymous class extensions contribute source and
+ * visibility directives without becoming additional evidence hosts.
  *
- * @evidence contracts/common.md#principled-implementation Interfaces, protocols and categories establish public identities, while extensions and implementations contribute compatible sites to them; Doxygen is attributed after this ownership model exists.
+ * @evidence contracts/common.md#principled-implementation Interfaces and protocols establish types, categories establish address scopes, and extensions and implementations contribute compatible sites. Withdrawals propagate before Doxygen hosts exclude categories and anonymous extension containers.
  * @evidence contracts/common.md#clear-and-simple-design The adapter owns snapshot-wide resolution and materialization; per-file syntax belongs to the scanner and Doxygen normalization to the documentation reader.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Non-guard preprocessing and Objective-C++ are reported as incomplete, and annotations on withdrawn declarations are diagnosed rather than lost.
  * @evidence contracts/common.md#meaningful-documentation The class comment explains the pipeline; its public members and private materializers are documented.
@@ -249,8 +251,9 @@ export class EvidenceObjcAdapter implements IEvidenceAdapter<"objc"> {
   /**
    * Applies merged withdrawals before creating eligible annotation hosts.
    *
-   * Hidden units cannot receive ordinary claim hosts after inheritance is
-   * resolved.
+   * Hidden units, category scopes, and anonymous extension containers cannot
+   * receive claim hosts. Extension sites still contribute inherited
+   * withdrawals.
    */
   private materializeDocumentation(
     inventory: IEvidenceInventory,
@@ -258,6 +261,10 @@ export class EvidenceObjcAdapter implements IEvidenceAdapter<"objc"> {
     published: Map<string, string>,
   ): void {
     const units = new Map(inventory.units.map((unit) => [unit.id, unit]));
+    const carriers: Map<string, string> = new Map(published);
+    for (const analysis of analyses)
+      for (const declaration of analysis.declarations)
+        if (declaration.form === "extension") carriers.delete(declaration.id);
     for (const analysis of analyses)
       for (const documentation of analysis.documentation) {
         const groups = this.attachmentGroups(documentation, published);
@@ -283,13 +290,20 @@ export class EvidenceObjcAdapter implements IEvidenceAdapter<"objc"> {
 
     const hidden = new Set<string>();
     for (const unit of inventory.units)
-      if (this.withdrawn(unit.id, units, new Set<string>()))
+      // Category scopes cannot host claims; withdrawals still reach members.
+      if (
+        unit.symbol === "scope" ||
+        this.withdrawn(unit.id, units, new Set<string>())
+      )
         hidden.add(unit.id);
     for (const analysis of analyses) {
       for (const documentation of analysis.documentation) {
         const publishedGroups = this.attachmentGroups(documentation, published);
         const groups = new Map<string, string[]>();
-        for (const [siteId, unitIds] of publishedGroups) {
+        for (const [siteId, unitIds] of this.attachmentGroups(
+          documentation,
+          carriers,
+        )) {
           const visible = unitIds.filter((unitId) => !hidden.has(unitId));
           if (visible.length !== 0) groups.set(siteId, visible);
         }
@@ -323,7 +337,7 @@ export class EvidenceObjcAdapter implements IEvidenceAdapter<"objc"> {
           inventory.diagnostics.push(...parsed.diagnostics);
         }
       }
-      this.materializeUndocumentedHosts(inventory, analysis, published, hidden);
+      this.materializeUndocumentedHosts(inventory, analysis, carriers, hidden);
     }
   }
 

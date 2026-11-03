@@ -117,7 +117,7 @@ export async function test_typescript_units(): Promise<void> {
     "type:Box",
     "type:IService",
     "type:Shape",
-    "type:Tools",
+    "scope:Tools",
     "type:Tools.Options",
   ].sort(compare);
 

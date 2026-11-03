@@ -33,11 +33,11 @@ export interface IEvidenceObjcDeclaration {
   name: string;
 
   /**
-   * Public programming selector.
+   * Programming declaration or address-only category kind.
    *
    * Population selection uses this category independently of source form.
    */
-  symbol: EvidenceProgrammingSymbol;
+  symbol: EvidenceProgrammingSymbol | "scope";
 
   /**
    * Source form governing exposure and merging.

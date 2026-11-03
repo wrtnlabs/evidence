@@ -79,7 +79,7 @@ export async function test_dart_units(): Promise<void> {
       "type:State",
       "property:State.ready",
       "property:State.stopped",
-      "type:Numbers",
+      "scope:Numbers",
       "function:Numbers.twice",
       "type:Identifier",
       "property:Identifier.value",

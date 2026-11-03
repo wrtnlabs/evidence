@@ -92,7 +92,7 @@ export async function test_objc_units(): Promise<void> {
       .sort((left, right) => left.localeCompare(right)),
     [
       "type:Widget",
-      'type:["Widget(Extras)"]',
+      'scope:["Widget(Extras)"]',
       'type:["protocol(Widget)"]',
       'property:Widget["ivar:count"]',
       'property:Widget["ivar:total"]',
@@ -149,7 +149,7 @@ export async function test_objc_units(): Promise<void> {
   TestValidator.equals(
     "physical declaration hosts include merged sites",
     inventory.hosts.length,
-    20,
+    17,
   );
   const shared = inventory.hosts.filter((host) => host.unitIds.length === 2);
   TestValidator.equals(

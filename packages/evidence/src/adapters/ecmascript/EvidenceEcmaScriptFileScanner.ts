@@ -27,7 +27,7 @@ import { EvidenceEcmaScriptSyntax } from "./EvidenceEcmaScriptSyntax";
  * `EvidenceEcmaScriptExportResolver` alone decides which local units become
  * public.
  *
- * @evidence contracts/common.md#principled-implementation One walk of the parsed module records declarations by kind (types, functions, properties, class and namespace members, parameter properties), JSDoc attachment, static imports and export edges, plus a bounded model of unconditional CommonJS initialization.
+ * @evidence contracts/common.md#principled-implementation One walk records declaration kinds, address-only namespace scopes, class and namespace members, parameter properties, JSDoc attachment, static imports and export edges, plus a bounded model of unconditional CommonJS initialization. Namespace sites accept withdrawals but never create evidence hosts, including when merged with real types.
  * @evidence contracts/common.md#clear-and-simple-design The scanner owns local extraction; the export resolver alone decides publication, and syntax helpers come from EvidenceEcmaScriptSyntax.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Computed keys, conditional CommonJS mutation, escaped aliases and other unsupported forms mark the file incomplete instead of guessing exports.
  * @evidence contracts/common.md#meaningful-documentation The class comment states its boundary; documented fields and methods explain each rule, and private helpers are named by role.
@@ -624,10 +624,10 @@ export class EvidenceEcmaScriptFileScanner {
     for (const [index, name] of names.entries()) {
       identity = [...identity, name];
       if (context.root !== undefined || index !== 0) suffix = [...suffix, name];
-      const type = this.addUnit(
+      const scope: IEvidenceEcmaScriptOwnedUnit = this.addUnit(
         index === 0 ? wrapper : declaration,
         declaration,
-        "type",
+        "scope",
         identity,
         root,
         suffix,
@@ -637,7 +637,7 @@ export class EvidenceEcmaScriptFileScanner {
         undefined,
         index === 0,
       );
-      parentId = type.unit.id;
+      parentId = scope.unit.id;
     }
     this.directExport(wrapper, local, context, false);
     if (functionNames.has(local)) return;
@@ -1448,14 +1448,16 @@ export class EvidenceEcmaScriptFileScanner {
    * Records the effective declaration for one ECMAScript semantic identity.
    *
    * TypeScript overloads and declaration merges append sites to one stable
-   * unit. JavaScript runtime definitions instead receive occurrence-specific
-   * IDs and replace the semantic lookup, preventing documentation on an
-   * obsolete value from attaching to the binding selected by exports.
+   * unit. A real type promotes its same-named namespace scope; namespace sites
+   * retain visibility directives without creating evidence hosts. JavaScript
+   * runtime definitions instead receive occurrence-specific IDs and replace the
+   * semantic lookup, preventing documentation on an obsolete value from
+   * attaching to the binding selected by exports.
    */
   private addUnit(
     siteNode: EvidenceNode,
     contentNode: EvidenceNode,
-    symbol: EvidenceProgrammingSymbol,
+    symbol: EvidenceProgrammingSymbol | "scope",
     identity: string[],
     root: string,
     suffix: string[],
@@ -1466,7 +1468,8 @@ export class EvidenceEcmaScriptFileScanner {
     attachDocumentation: boolean = true,
     runtimeReplacement: boolean = false,
   ): IEvidenceEcmaScriptOwnedUnit {
-    const semanticId: string = `${this.type}:${this.source.id}:${symbol}:${JSON.stringify(identity)}`;
+    // Namespace and type partners share identity regardless of source order.
+    const semanticId: string = `${this.type}:${this.source.id}:${symbol === "scope" ? "type" : symbol}:${JSON.stringify(identity)}`;
     const id: string = runtimeReplacement
       ? `${semanticId}:binding:${String(siteNode.startIndex)}`
       : semanticId;
@@ -1501,8 +1504,12 @@ export class EvidenceEcmaScriptFileScanner {
       if (previous !== undefined) previous.content.push(...site.content);
       record.typeSpace ||= typeSpace;
       record.valueSpace ||= valueSpace;
+      if (symbol !== "scope") record.unit.symbol = symbol;
     }
-    this.registerHost(siteNode, siteId, id, attachDocumentation);
+    if (symbol === "scope") {
+      if (attachDocumentation)
+        this.attach(siteNode, undefined, siteId, id, true);
+    } else this.registerHost(siteNode, siteId, id, attachDocumentation);
     if (extraHost !== undefined)
       this.registerHost(extraHost, siteId, id, attachDocumentation);
     return record;

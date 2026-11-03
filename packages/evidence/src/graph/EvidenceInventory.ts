@@ -71,6 +71,9 @@ export class EvidenceInventory {
    * Selects visible units and structural scopes into an independent population;
    * unknown IDs throw.
    *
+   * Address-only scope IDs create no requirements or hosts. Their selected
+   * descendants retain them as resolvable ancestors.
+   *
    * @evidence contracts/common.md#principled-implementation The index computes selection and withdrawal closure; a clone isolates its records.
    * @evidence contracts/common.md#clear-and-simple-design The facade owns capture and copied outputs, while EvidenceInventoryIndex owns normalization, selection and address lookup.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Construction validates the full inventory and captures all nested records; operations preserve incomplete diagnostics and clone any returned records.

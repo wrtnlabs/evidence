@@ -210,8 +210,8 @@ export class EvidenceDartFileScanner {
   }
 
   /**
-   * Gives named extensions their own owner while unnamed extensions remain
-   * library-local.
+   * Gives named extensions address-only owners while extension types retain
+   * actual type ownership and unnamed extensions remain library-local.
    *
    * This preserves Dart's distinct public address rules for extension members.
    */
@@ -232,7 +232,13 @@ export class EvidenceDartFileScanner {
           (child) => child.type === "identifier",
         ) ?? null;
     if (node.type === "extension_declaration" && name === null) return;
-    const declaration = this.add(node, name?.text, "type", owner, "nominal");
+    const declaration: IEvidenceDartDeclaration | undefined = this.add(
+      node,
+      name?.text,
+      node.type === "extension_declaration" ? "scope" : "type",
+      owner,
+      "nominal",
+    );
     if (declaration === undefined) return;
     const representation = node.childForFieldName("representation");
     if (representation !== null)
@@ -377,7 +383,7 @@ export class EvidenceDartFileScanner {
   private add(
     node: EvidenceNode,
     name: string | undefined,
-    symbol: EvidenceProgrammingSymbol,
+    symbol: EvidenceProgrammingSymbol | "scope",
     owner: IEvidenceDartDeclaration | undefined,
     role: string,
   ): IEvidenceDartDeclaration | undefined {

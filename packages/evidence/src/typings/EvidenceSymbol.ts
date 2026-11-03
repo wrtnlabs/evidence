@@ -3,16 +3,18 @@ import type { EvidenceMarkdownSymbol } from "./EvidenceMarkdownSymbol";
 import type { EvidenceProgrammingSymbol } from "./EvidenceProgrammingSymbol";
 
 /**
- * Symbol kind used to select a unit within its artifact-specific inventory.
+ * Declaration or structural kind within an artifact-specific inventory.
  *
  * Programming, database, and Markdown adapters contribute their own precise
  * classifications. `operation` covers API operations, whose target semantics do
- * not correspond to a programming declaration or document heading. Consumers
- * must retain the accompanying artifact type when interpreting this value.
+ * not correspond to a programming declaration or document heading. `scope`
+ * represents address-only namespaces, modules, and extension containers; it is
+ * not a selectable programming symbol and cannot host evidence. Consumers must
+ * retain the accompanying artifact type when interpreting this value.
  *
- * @evidence contracts/common.md#principled-implementation The union composes each family's selector kinds plus operation, so a selector value always means a kind defined by its artifact family.
+ * @evidence contracts/common.md#principled-implementation The union composes each family's selector kinds plus operation and an address-only scope kind, keeping namespaces and modules distinct from selectable declarations.
  * @evidence contracts/common.md#clear-and-simple-design Family unions own their members; this alias composes them without repetition.
- * @evidence contracts/common.md#prohibited-implementation-shortcuts No family is special-cased; operation is listed because API operations have no other family kind.
+ * @evidence contracts/common.md#prohibited-implementation-shortcuts Operation names API operations and scope names address-only containers; neither coerces these units into programming declaration kinds.
  * @evidence contracts/common.md#meaningful-documentation The comment explains why the artifact type must accompany the value when interpreting it.
  * @evidenceExclude contracts/performance.md#efficient-algorithms A type declaration chooses no processing strategy.
  * @evidenceExclude contracts/performance.md#reuse-equivalent-work A type declaration computes nothing, so there is no work to share.
@@ -22,4 +24,5 @@ export type EvidenceSymbol =
   | EvidenceProgrammingSymbol
   | EvidenceDatabaseSymbol
   | EvidenceMarkdownSymbol
-  | "operation";
+  | "operation"
+  | "scope";

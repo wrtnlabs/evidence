@@ -4,7 +4,7 @@ import type { IEvidenceUnitSite } from "./IEvidenceUnitSite";
 import type { IEvidenceWithdrawal } from "./IEvidenceWithdrawal";
 
 /**
- * A semantic declaration that can participate in evidence coverage.
+ * A semantic declaration or address-only structural container.
  *
  * Adapters create units for their public declarations, such as a class,
  * database column, Markdown heading, or API operation. Coverage counts these
@@ -63,11 +63,12 @@ export interface IEvidenceUnit {
   type: EvidenceArtifactType;
 
   /**
-   * Selector category assigned by the adapter.
+   * Declaration or structural category assigned by the adapter.
    *
    * Configuration uses this category to choose required units. An unselected
    * parent can remain addressable as a scope without adding to that
-   * denominator.
+   * denominator. The `scope` kind is always structural and cannot be selected
+   * as a requirement or evidence host.
    */
   symbol: EvidenceSymbol;
 

@@ -75,8 +75,9 @@ export interface IEvidenceSwiftDeclaration {
   /**
    * Marks a record that reopens a nominal type instead of defining one.
    *
-   * Extension records contribute their source position and documentation, while
-   * their members acquire identity from the resolved nominal target.
+   * Extension records contribute source positions and visibility directives,
+   * while their members acquire identity from the resolved nominal target. An
+   * extension container never creates an additional evidence host.
    */
   extension: boolean;
 

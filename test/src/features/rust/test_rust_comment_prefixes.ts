@@ -15,13 +15,14 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  *
  * 1. Analyze outer documentation, attributes, and ordinary comments separated by
  *    whitespace before one public item.
- * 2. Require only the documentation carrier to attach, ordinary tagged comments to
- *    remain unsupported, and content edits to affect the intended
- *    fingerprints.
+ * 2. Require outer documentation to attach to actual declarations and ordinary or
+ *    module evidence to remain unsupported without moving onto a child.
+ * 3. Require withdrawals to cross comments and semantic attribute edits to change
+ *    fingerprints while evidence prose edits leave them stable.
  *
  * @evidence contracts/testing.md#behavioral-verification Analyzes outer documentation, attributes and ordinary comments before one public item and asserts attachment, diagnostics and fingerprints.
  * @evidence contracts/testing.md#independent-expectations Expected attachment follows rustdoc's outer-documentation rule; fingerprint expectations are relational across content edits.
- * @evidence contracts/testing.md#distinguishing-cases Covers whitespace-separated comments between documentation and attributes and tagged ordinary comments that must stay unsupported.
+ * @evidence contracts/testing.md#distinguishing-cases Covers LF and CRLF documentation and attributes separated by ordinary comments, unsupported ordinary and inner-module claims that cannot move onto a child, inherited module withdrawal, and conditional or expanding attributes that remain incomplete.
  * @evidence contracts/testing.md#execution-ownership The exported test_rust_comment_prefixes is discovered by DynamicExecutor under test/src/features and calls maintained source in-process; it installs no consumer, packs nothing and spawns no CLI.
  */
 export async function test_rust_comment_prefixes(): Promise<void> {
@@ -63,7 +64,7 @@ export async function test_rust_comment_prefixes(): Promise<void> {
     );
 
     TestValidator.equals(
-      "outer and inner documentation owners",
+      "outer documentation owners exclude module claims",
       inventory.declarations
         .map((item) => ({
           target: item.target,
@@ -72,14 +73,13 @@ export async function test_rust_comment_prefixes(): Promise<void> {
         .sort((a, b) => a.target.localeCompare(b.target)),
       [
         { target: "docs/spec.md#field", owners: ["Sale.title"] },
-        { target: "docs/spec.md#module", owners: ["container"] },
         { target: "docs/spec.md#type", owners: ["Sale"] },
       ],
     );
     TestValidator.equals(
-      "ordinary annotation stays unsupported",
+      "ordinary and module annotations stay unsupported",
       inventory.diagnostics.map((item) => item.code),
-      ["unsupported-annotation-host"],
+      ["unsupported-annotation-host", "unsupported-annotation-host"],
     );
     TestValidator.equals(
       "withdrawal crosses ordinary comments",

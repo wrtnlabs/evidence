@@ -27,10 +27,11 @@ import type { IEvidenceWithdrawal } from "../structures/IEvidenceWithdrawal";
  * silently disappearing from the denominator. Normalization makes snapshots and
  * serialization deterministic.
  *
- * Selection distinguishes required units from their addressable ancestors and
- * propagates withdrawals through explicit parent links. Resolution then matches
- * an exact file and segmented accessor within that scope. Aliases can name one
- * identity; an address naming several identities remains ambiguous.
+ * Selection excludes address-only scope records from requirements and hosts,
+ * distinguishes required units from their addressable ancestors, and propagates
+ * withdrawals through explicit parent links. Resolution then matches an exact
+ * file and segmented accessor within that scope. Aliases can name one identity;
+ * an address naming several identities remains ambiguous.
  *
  * Snapshots, populations, and resolutions borrow internal records. Callers must
  * keep the input and returned records immutable for the index lifetime. The
@@ -182,16 +183,17 @@ export class EvidenceInventoryIndex {
    * Projects selected identities and the structural context needed to resolve
    * them.
    *
-   * Required units exclude effective withdrawals, while scopes include their
-   * real ancestors. Hosts are narrowed to selected semantic owners, including
-   * hosts without tags. Unknown requested IDs throw because they indicate an
-   * invalid selection, rather than an empty configured population.
+   * Required units exclude address-only scopes and effective withdrawals, while
+   * scopes include their real ancestors. Hosts are narrowed to selected
+   * semantic owners, including hosts without tags. Unknown requested IDs throw
+   * because they indicate an invalid selection rather than an empty
+   * population.
    *
    * @example
    *   // Selecting a method retains its class as a resolvable aggregate scope.
    *   // The class does not become an extra required unit unless its ID is selected.
    *
-   * @evidence contracts/common.md#principled-implementation Requested IDs are validated, their ancestor closure kept for explanations, withdrawn units removed, visible scopes rebuilt from surviving units, and attached hosts narrowed to selected owners.
+   * @evidence contracts/common.md#principled-implementation Requested IDs are validated, address-only scopes never become requirements, declaration ancestor closure is kept for explanations, withdrawn units are removed, visible scopes are rebuilt from surviving units, and attached hosts are narrowed to selected owners.
    * @evidence contracts/common.md#clear-and-simple-design Selection uses the private ancestor and hidden helpers.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Unknown IDs throw instead of producing an empty population, and owners of only withdrawn units do not re-enter as scopes.
    * @evidence contracts/common.md#meaningful-documentation The comment explains units, scopes and hosts with an example; inline comments explain closure and scope rules.
@@ -205,12 +207,17 @@ export class EvidenceInventoryIndex {
     // Keep the original closure for hidden-target explanations, even when a
     // requested unit is later removed by an inherited withdrawal.
     for (const id of requested) {
-      if (!this.units.has(id))
+      const unit: IEvidenceUnit | undefined = this.units.get(id);
+      if (unit === undefined)
         throw new Error(`Unknown selected semantic identity: ${id}`);
+      if (unit.symbol === "scope") continue;
       this.closeParents(id, scopes);
     }
-    const visible = this.data.units.filter(
-      (unit) => requested.has(unit.id) && !this.hidden(unit.id),
+    const visible: IEvidenceUnit[] = this.data.units.filter(
+      (unit: IEvidenceUnit): boolean =>
+        unit.symbol !== "scope" &&
+        requested.has(unit.id) &&
+        !this.hidden(unit.id),
     );
     const selected = new Set(visible.map((unit) => unit.id));
     // Only ancestors of surviving requirements remain visible scopes. An owner
@@ -305,8 +312,10 @@ export class EvidenceInventoryIndex {
     const closure: Set<string> = new Set<string>();
     const visible: Set<string> = new Set<string>();
     for (const id of new Set(ids)) {
-      if (!this.units.has(id))
+      const unit: IEvidenceUnit | undefined = this.units.get(id);
+      if (unit === undefined)
         throw new Error(`Unknown selected semantic identity: ${id}`);
+      if (unit.symbol === "scope") continue;
       this.closeParents(id, closure);
       if (!this.hidden(id)) this.closeParents(id, visible);
     }

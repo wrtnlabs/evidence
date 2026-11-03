@@ -34,7 +34,8 @@ import type { EvidenceEcmaScriptType } from "./EvidenceEcmaScriptType";
  * attachment, then export resolution determines which identities are publicly
  * reachable within the configured root. Only afterward are annotations
  * materialized as hosts and statements, preserving aliases without duplicating
- * semantic declarations.
+ * semantic declarations. Namespace sites carry withdrawals and address scopes
+ * without becoming evidence hosts, including when merged with actual types.
  *
  * Source, package-scope, and syntax failures all contribute to completeness.
  * Package dependencies remain observable for watch, and each analysis owns its
@@ -391,7 +392,11 @@ export abstract class EvidenceEcmaScriptAdapter<
       }
     const hidden = new Set<string>();
     for (const unit of inventory.units)
-      if (this.withdrawn(unit.id, units, new Set<string>()))
+      // Scope records cannot host claims; only withdrawals hide descendants.
+      if (
+        unit.symbol === "scope" ||
+        this.withdrawn(unit.id, units, new Set<string>())
+      )
         hidden.add(unit.id);
     for (const analysis of analyses)
       for (const comment of analysis.comments) {
