@@ -39,9 +39,9 @@ export interface IEvidenceCppDeclaration {
   /**
    * Evidence symbol category assigned after declaration-family materialization.
    *
-   * It preserves the graph's language-independent selector vocabulary.
+   * Namespaces use the address-only scope kind rather than a type selector.
    */
-  symbol: EvidenceProgrammingSymbol;
+  symbol: EvidenceProgrammingSymbol | "scope";
 
   /**
    * C++ declaration form that controls compatibility within one family.

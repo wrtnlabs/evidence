@@ -29,9 +29,10 @@ import { EvidenceDartLibraries } from "./EvidenceDartLibraries";
  * and show/hide export publication expose aliases without duplicating
  * identities. Documentation is attached after those owners exist. Missing
  * library inputs remain dependencies so a later watch cycle can observe their
- * creation.
+ * creation. Ordinary named extensions provide member address scopes rather than
+ * type obligations or evidence hosts; extension types remain types.
  *
- * @evidence contracts/common.md#principled-implementation Files record directives and physical declarations, reciprocal part directives establish defining-library ownership, units are materialized per library, and show/hide export filters publish aliases without duplicating identities.
+ * @evidence contracts/common.md#principled-implementation Reciprocal part directives establish library ownership, units and show/hide exports preserve identity, ordinary extensions provide address-only scopes, and documentation hosts exclude those scopes after withdrawals propagate. Extension types remain actual types.
  * @evidence contracts/common.md#clear-and-simple-design The adapter owns snapshot-wide resolution and materialization; per-file syntax belongs to the scanner and DartDoc normalization to the documentation reader.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Package or SDK export URIs are reported as incomplete, and missing library inputs remain watch dependencies instead of being ignored.
  * @evidence contracts/common.md#meaningful-documentation The class comment explains the pipeline; its public members and private materializers are documented.
@@ -253,7 +254,11 @@ export class EvidenceDartAdapter implements IEvidenceAdapter<"dart"> {
 
     const hidden = new Set<string>();
     for (const unit of inventory.units)
-      if (this.withdrawn(unit.id, units, new Set<string>()))
+      // Ordinary extensions provide addresses and withdrawals, not type hosts.
+      if (
+        unit.symbol === "scope" ||
+        this.withdrawn(unit.id, units, new Set<string>())
+      )
         hidden.add(unit.id);
     for (const analysis of analyses) {
       for (const documentation of analysis.documentation) {

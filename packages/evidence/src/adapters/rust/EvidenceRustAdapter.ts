@@ -25,9 +25,10 @@ import { EvidenceRustModuleResolver } from "./EvidenceRustModuleResolver";
  * that lexical presence makes an item publicly reachable.
  * EvidenceRustModuleResolver publishes semantic identities across the
  * configured snapshot before doc comments attach to those identities and
- * inherited withdrawal removes eligible hosts.
+ * inherited withdrawal removes eligible hosts. Modules remain address scopes
+ * and never become types or evidence hosts.
  *
- * @evidence contracts/common.md#principled-implementation File scans keep declaration and documentation candidates; the module resolver builds the selected crate graph, follows pub use chains and impl ownership, and publishes identities before doc comments attach and inherited withdrawals remove hosts.
+ * @evidence contracts/common.md#principled-implementation File scans keep declarations and address-only modules; the resolver builds the crate graph, follows pub use and impl ownership, and publishes identities before withdrawals propagate and documentation attaches only to actual declaration hosts.
  * @evidence contracts/common.md#clear-and-simple-design The adapter owns snapshot-wide resolution and materialization; per-file syntax belongs to the scanner and rustdoc normalization to the documentation reader.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Cargo features, cfg alternatives, macros and #[path] are reported as incomplete; lexical presence alone never makes an item public.
  * @evidence contracts/common.md#meaningful-documentation The class comment explains the pipeline; its public members and private materializers are documented.
@@ -194,7 +195,11 @@ export class EvidenceRustAdapter implements IEvidenceAdapter<"rust"> {
     // descendants before evidence from another fragment can become eligible.
     const hidden = new Set<string>();
     for (const unit of inventory.units)
-      if (this.withdrawn(unit.id, units, new Set<string>()))
+      // Modules remain address scopes; only withdrawals hide their descendants.
+      if (
+        unit.symbol === "scope" ||
+        this.withdrawn(unit.id, units, new Set<string>())
+      )
         hidden.add(unit.id);
     for (const analysis of analyses)
       for (const documentation of analysis.documentation) {

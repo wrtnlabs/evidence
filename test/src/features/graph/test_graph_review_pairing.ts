@@ -20,7 +20,7 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * must not borrow that host's evidence.
  *
  * 1. Create Pricing and Tax requirements and compute their current fingerprints.
- * 2. Put Pricing evidence on an interface and its review on the merged namespace;
+ * 2. Put Pricing evidence and its review on separate merged interface sites;
  *    require no review finding for that shared semantic identity.
  * 3. Add three independent invalid review scenarios and verify that:
  *
@@ -70,8 +70,8 @@ export async function test_graph_review_pairing(): Promise<void> {
         }
 
         /** @evidenceReview docs/spec.md#pricing #${pricingFingerprint} Checked both halves of the merged contract. */
-        export namespace Merged {
-          export const category = "retail";
+        export interface Merged {
+          category: string;
         }
 
         /**

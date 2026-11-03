@@ -227,7 +227,7 @@ export class EvidenceRustFileScanner {
       item,
       modulePath,
       name,
-      "type",
+      "scope",
       "module",
       EvidenceRustSyntax.visibility(item),
     );
@@ -656,7 +656,7 @@ export class EvidenceRustFileScanner {
     item: EvidenceNode,
     modulePath: string[],
     name: string,
-    symbol: EvidenceProgrammingSymbol,
+    symbol: EvidenceProgrammingSymbol | "scope",
     form: EvidenceRustDeclarationForm,
     visibility: EvidenceRustVisibility,
     ownerDeclarationId?: string,

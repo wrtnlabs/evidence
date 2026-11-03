@@ -43,12 +43,11 @@ export interface IEvidenceRustDeclaration {
   name: string;
 
   /**
-   * Evidence selector family assigned to the declaration.
+   * Declaration or address-only scope kind assigned to the item.
    *
-   * Consumers distinguish nominal types, functions, and properties through this
-   * value.
+   * Modules use scope; actual declarations use type, function, or property.
    */
-  symbol: EvidenceProgrammingSymbol;
+  symbol: EvidenceProgrammingSymbol | "scope";
 
   /**
    * Rust grammar form establishing the declaration.

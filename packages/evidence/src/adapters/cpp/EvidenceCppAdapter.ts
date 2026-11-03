@@ -32,14 +32,15 @@ import type { IEvidenceCppResolvedAlias } from "./IEvidenceCppResolvedAlias";
  * The scanner records lexical declarations and qualified definitions before the
  * snapshot-wide materializer decides which occurrences belong to one unit.
  * Alias resolution can then project public paths without changing canonical
- * identity. Documentation is attached only after those relationships are
- * known.
+ * identity. Documentation is attached only after those relationships are known.
+ * Namespaces retain address scopes and withdrawals without becoming types or
+ * evidence hosts.
  *
  * The pipeline carries conflicts and unsupported source forms into incomplete
  * output. It does not replace C++ lookup, preprocessing, or instantiation with
  * name-based guesses merely to produce a smaller public inventory.
  *
- * @evidence contracts/common.md#principled-implementation Lexical declarations and qualified out-of-class definitions are grouped across the configured snapshot by fully qualified identity (with template arity segments), using and namespace aliases are resolved to unique selected units, and Doxygen attaches afterwards.
+ * @evidence contracts/common.md#principled-implementation Lexical declarations and qualified definitions are grouped by qualified identity with template arity; aliases resolve to unique units, namespaces retain address-only scopes, and Doxygen hosts exclude those scopes after inherited withdrawals are known.
  * @evidence contracts/common.md#clear-and-simple-design The adapter owns snapshot-wide resolution and materialization; per-file syntax belongs to the scanner and Doxygen normalization to the documentation reader.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Inheritance, friends, specializations, macros and modules are reported as incomplete instead of being replaced by name-based guesses.
  * @evidence contracts/common.md#meaningful-documentation The class comment explains the pipeline; its public members and private materializers are documented.
@@ -557,7 +558,11 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
 
     const hidden = new Set<string>();
     for (const unit of inventory.units)
-      if (this.withdrawn(unit.id, units, new Set<string>()))
+      // Namespace scopes retain withdrawals and addresses, but cannot host claims.
+      if (
+        unit.symbol === "scope" ||
+        this.withdrawn(unit.id, units, new Set<string>())
+      )
         hidden.add(unit.id);
     for (const analysis of analyses) {
       for (const documentation of analysis.documentation) {
@@ -750,7 +755,8 @@ export class EvidenceCppAdapter implements IEvidenceAdapter<"cpp"> {
   }
 
   private unitId(declaration: IEvidenceCppDeclaration): string {
-    return `cpp:${declaration.symbol}:${JSON.stringify(declaration.identity)}`;
+    // Namespace owners share the identity index used by qualified declarations.
+    return `cpp:${declaration.symbol === "scope" ? "type" : declaration.symbol}:${JSON.stringify(declaration.identity)}`;
   }
 
   private typeId(identity: string[]): string {

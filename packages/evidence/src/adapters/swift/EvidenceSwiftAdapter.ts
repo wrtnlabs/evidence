@@ -28,8 +28,10 @@ import { EvidenceSwiftOwnership } from "./EvidenceSwiftOwnership";
  * root identity so equal declarations in separate module selections stay
  * distinct. Documentation then attaches to the reconciled owners, while source
  * dependencies retain every physical file needed to invalidate the analysis.
+ * Extension containers contribute source and visibility directives without
+ * creating additional evidence hosts for their nominal owners.
  *
- * @evidence contracts/common.md#principled-implementation Explicit declarations are scanned per file, extensions and aliases are reconciled with nominal types across the configured module, and units include the root identity so equal declarations in separate module selections stay distinct.
+ * @evidence contracts/common.md#principled-implementation Extensions and aliases reconcile with nominal types within one module, whose root participates in identity. Extension sites contribute source and withdrawals, while evidence hosts are limited to actual type and member declarations.
  * @evidence contracts/common.md#clear-and-simple-design The adapter owns snapshot-wide resolution and materialization; per-file syntax belongs to the scanner and DocC normalization to the documentation reader.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Macros and conditional compilation are reported as incomplete; extensions never attach to an unverified owner.
  * @evidence contracts/common.md#meaningful-documentation The class comment explains the pipeline; its public members and private materializers are documented.
@@ -293,6 +295,10 @@ export class EvidenceSwiftAdapter implements IEvidenceAdapter<"swift"> {
     published: Map<string, string>,
   ): void {
     const units = new Map(inventory.units.map((unit) => [unit.id, unit]));
+    const carriers: Map<string, string> = new Map(published);
+    for (const analysis of analyses)
+      for (const declaration of analysis.declarations)
+        if (declaration.extension) carriers.delete(declaration.id);
     for (const analysis of analyses)
       for (const documentation of analysis.documentation) {
         const groups = this.attachmentGroups(documentation, published);
@@ -323,7 +329,10 @@ export class EvidenceSwiftAdapter implements IEvidenceAdapter<"swift"> {
       for (const documentation of analysis.documentation) {
         const publishedGroups = this.attachmentGroups(documentation, published);
         const groups = new Map<string, string[]>();
-        for (const [siteId, unitIds] of publishedGroups) {
+        for (const [siteId, unitIds] of this.attachmentGroups(
+          documentation,
+          carriers,
+        )) {
           const visible = unitIds.filter((unitId) => !hidden.has(unitId));
           if (visible.length !== 0) groups.set(siteId, visible);
         }
@@ -357,7 +366,7 @@ export class EvidenceSwiftAdapter implements IEvidenceAdapter<"swift"> {
           inventory.diagnostics.push(...parsed.diagnostics);
         }
       }
-      this.materializeUndocumentedHosts(inventory, analysis, published, hidden);
+      this.materializeUndocumentedHosts(inventory, analysis, carriers, hidden);
     }
   }
 

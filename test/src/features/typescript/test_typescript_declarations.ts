@@ -78,8 +78,8 @@ export async function test_typescript_declarations(): Promise<void> {
       "property:WithdrawnConstructor.prototype.value",
       "type:Abstract",
       "type:Declared",
-      "type:Outer",
-      "type:Outer.Inner",
+      "scope:Outer",
+      "scope:Outer.Inner",
       "type:Outer.Inner.Shape",
       "type:OverloadedConstructor",
       "type:PrivateConstructor",
@@ -88,8 +88,12 @@ export async function test_typescript_declarations(): Promise<void> {
   );
 
   // Every synthesized namespace level remains navigable through the unit tree.
-  const outer = requireUnit(inventory.units, "type", "Outer");
-  const inner = requireUnit(inventory.units, "type", "Outer.Inner");
+  const outer: IEvidenceUnit = requireUnit(inventory.units, "scope", "Outer");
+  const inner: IEvidenceUnit = requireUnit(
+    inventory.units,
+    "scope",
+    "Outer.Inner",
+  );
   const shape = requireUnit(inventory.units, "type", "Outer.Inner.Shape");
   const value = requireUnit(
     inventory.units,
@@ -139,7 +143,7 @@ export async function test_typescript_declarations(): Promise<void> {
     extensions.units
       .map((unit) => `${unit.symbol}:${unit.identity.join(".")}`)
       .sort(compare),
-    ["function:Cts.run", "function:Mts.run", "type:Cts", "type:Mts"],
+    ["function:Cts.run", "function:Mts.run", "scope:Cts", "scope:Mts"],
   );
   TestValidator.equals(
     "complete declaration extension inventory",

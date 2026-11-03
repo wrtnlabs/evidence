@@ -163,7 +163,7 @@ export class EvidenceObjcFileScanner {
   }
 
   /**
-   * Keeps protocols and named categories in distinct nominal namespaces.
+   * Keeps protocols as types and named categories as distinct address scopes.
    *
    * Their literal owner paths must not collide with ordinary interface
    * declarations.
@@ -198,11 +198,11 @@ export class EvidenceObjcFileScanner {
           : category === undefined
             ? "interface"
             : "category";
-    const owner = this.add(
+    const owner: IEvidenceObjcDeclaration = this.add(
       item,
       item,
       nominal,
-      "type",
+      category === undefined ? "type" : "scope",
       form,
       [nominal],
       !implementation && !extension,
@@ -563,7 +563,7 @@ export class EvidenceObjcFileScanner {
     item: EvidenceNode,
     siteNode: EvidenceNode,
     name: string,
-    symbol: EvidenceProgrammingSymbol,
+    symbol: EvidenceProgrammingSymbol | "scope",
     form: EvidenceObjcDeclarationForm,
     identity: string[],
     visible: boolean,

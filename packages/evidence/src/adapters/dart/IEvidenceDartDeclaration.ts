@@ -35,13 +35,12 @@ export interface IEvidenceDartDeclaration {
   name: string;
 
   /**
-   * Classifies the declaration in Evidence's language-independent selector
-   * vocabulary.
+   * Classifies an actual declaration or an address-only extension scope.
    *
    * Materialization preserves this category while it reconciles declarations
    * with the same Dart name.
    */
-  symbol: EvidenceProgrammingSymbol;
+  symbol: EvidenceProgrammingSymbol | "scope";
 
   /**
    * Distinguishes declaration forms that share a Dart name.

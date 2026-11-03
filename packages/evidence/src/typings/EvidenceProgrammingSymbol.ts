@@ -1,13 +1,14 @@
 /**
  * Public programming declarations classified by each language adapter.
  *
- * - "type": classes, interfaces, type aliases, namespaces, and their equivalents.
+ * - "type": classes, interfaces, type aliases, and their equivalents.
  * - "function": functions, public methods, and callable declarations.
  * - "property": public data fields and variables.
  *
  * TypeScript classification:
  *
- * - Type declarations must be exported; enums are excluded.
+ * - Type declarations must be exported; enums are excluded. Namespaces provide
+ *   address scopes and do not create type obligations or evidence hosts.
  * - Functions include:
  *
  *   - Exported functions and consts initialized with arrow/function expressions,
@@ -41,8 +42,8 @@
  * - Type-only exports expose type-space declarations and withhold value-space
  *   declarations across every export spelling and module boundary:
  *
- *   - Classes/namespaces themselves remain visible, but class members and namespace
- *       values do not.
+ *   - Classes and namespace address scopes remain visible, but class members and
+ *       namespace values do not.
  *   - Standalone interface and object-shaped alias members remain visible,
  *       including callable members. Interfaces merged with classes follow the
  *       class's value-space member rules.
@@ -55,9 +56,9 @@
  *   characters match exactly; path normalization must not rewrite them.
  * - Re-exports do not create duplicate units in the barrel file.
  *
- * Types and namespaces contain their declared descendants. Ordinary citations
- * and permitted exclusions cover selected descendants, and unselected ancestors
- * remain addressable.
+ * Types and address-only namespaces contain their declared descendants.
+ * Ordinary citations and permitted exclusions cover selected descendants, and
+ * unselected ancestors remain addressable.
  *
  * @evidence contracts/common.md#principled-implementation Three cross-language kinds give every programming adapter one classification target while each adapter maps its own declarations onto them.
  * @evidence contracts/common.md#clear-and-simple-design The alias defines only the shared kinds; the TypeScript classification and addressing it documents are implemented by the TypeScript adapter.

@@ -1,6 +1,7 @@
 import { EvidenceTypeScriptAdapter } from "@wrtnlabs/evidence";
 import type {
   IEvidenceInventory,
+  IEvidenceHost,
   IEvidencePublicAddress,
   IEvidenceUnit,
 } from "@wrtnlabs/evidence";
@@ -20,13 +21,14 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  *    an interface with a companion namespace containing another interface.
  * 2. Require overload and class/interface sites to merge without duplicating
  *    semantic units.
- * 3. Verify namespace members retain their public nested paths, including
- *    `IShoppingSale.ICreate.title`.
+ * 3. Verify namespace members retain public paths and parents, including
+ *    `IShoppingSale.ICreate.title`, and either declaration order leaves one
+ *    actual type host without an additional namespace host.
  * 4. Require the resulting inventory to remain complete and diagnostic-free.
  *
  * @evidence contracts/testing.md#behavioral-verification Analyzes overloads, class and interface merges, function namespaces and an interface with a companion namespace and asserts units, sites and nested paths.
  * @evidence contracts/testing.md#independent-expectations Expected merging follows TypeScript declaration merging, written in the test.
- * @evidence contracts/testing.md#distinguishing-cases Covers each merge form, nested namespace paths and a complete diagnostic-free inventory.
+ * @evidence contracts/testing.md#distinguishing-cases Covers each merge form, nested namespace paths, namespace-before-type promotion and type-before-namespace preservation, one actual type host in either order, and a complete diagnostic-free inventory.
  * @evidence contracts/testing.md#execution-ownership The exported test_typescript_merges is discovered by DynamicExecutor under test/src/features and calls maintained source in-process; it installs no consumer, packs nothing and spawns no CLI.
  */
 export async function test_typescript_merges(): Promise<void> {
@@ -65,6 +67,13 @@ export async function test_typescript_merges(): Promise<void> {
       export interface ICreate {
         title: string;
       }
+    }
+
+    export namespace NamespaceFirst {
+      export interface Child {}
+    }
+    export interface NamespaceFirst {
+      id: string;
     }
   `;
   const inventory = await new EvidenceTypeScriptAdapter().analyze(
@@ -164,6 +173,26 @@ export async function test_typescript_merges(): Promise<void> {
     ),
   );
   TestValidator.equals("valid merged inventory", inventory.diagnostics, []);
+  for (const name of ["IShoppingSale", "NamespaceFirst"]) {
+    const owner: IEvidenceUnit = requireUnit(inventory, "type", name);
+    TestValidator.equals(
+      `${name} retains both source sites`,
+      owner.sites.length,
+      2,
+    );
+    TestValidator.equals(
+      `${name} has one actual type host`,
+      inventory.hosts.filter((host: IEvidenceHost): boolean =>
+        host.unitIds.includes(owner.id),
+      ).length,
+      1,
+    );
+  }
+  TestValidator.equals(
+    "namespace-first child retains the actual type owner",
+    requireUnit(inventory, "type", "NamespaceFirst.Child").parentId,
+    requireUnit(inventory, "type", "NamespaceFirst").id,
+  );
 }
 
 /**
