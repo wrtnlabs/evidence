@@ -13,7 +13,6 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { deserialize } from "node:v8";
 import typia from "typia";
@@ -36,7 +35,7 @@ import type { IEvidenceTtsxManifest } from "./IEvidenceTtsxManifest";
  * @evidence contracts/common.md#meaningful-documentation The comment explains the consumer-compiler choice and the serialization; each helper documents its own boundary.
  * @evidence contracts/performance.md#efficient-algorithms One ttsx process per evaluation; cost is dominated by type checking in the child.
  * @evidenceExclude contracts/performance.md#reuse-equivalent-work Each evaluation must start with a fresh project so watch sees configuration edits; results are deliberately not reused.
- * @evidence contracts/performance.md#bound-retention-and-release-resources The temporary project is removed in finally with retries, and the child process settles the promise on close. When the system temp directory is on another volume, the empty `.tmp/evidence-config` base directory beside the dependency tree is kept for reuse.
+ * @evidence contracts/performance.md#bound-retention-and-release-resources Each evaluation owns one temporary project under node_modules/.cache/evidence and removes it in finally with retries; the child process settles the promise on close. The shared cache base remains for later evaluations.
  */
 export async function evaluateTypeScriptConfig(
   configFile: string,
@@ -159,6 +158,7 @@ export async function evaluateTypeScriptConfig(
     );
     await runEvaluator(
       configFile,
+      temporary,
       [
         launcher,
         "--binary",
@@ -200,11 +200,12 @@ export async function evaluateTypeScriptConfig(
  * Starts the isolated evaluator and forwards compiler output without parsing or
  * rewriting it.
  *
- * Config loading owns the failure boundary, while this helper preserves
- * TypeScript and runtime diagnostics in their original format.
+ * Compiler subprocesses use the owned project for temporary files, and their
+ * diagnostics retain the original TypeScript and runtime formatting.
  */
 async function runEvaluator(
   configFile: string,
+  temporary: string,
   args: string[],
   writeDiagnostic: (content: string) => void,
 ): Promise<void> {
@@ -217,6 +218,12 @@ async function runEvaluator(
         cwd: path.dirname(configFile),
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
+        env: {
+          ...process.env,
+          TEMP: temporary,
+          TMP: temporary,
+          TMPDIR: temporary,
+        },
       });
       if (child.stdout !== null) {
         child.stdout.setEncoding("utf8");
@@ -308,29 +315,35 @@ async function findNodeModules(start: string): Promise<string | undefined> {
 }
 
 /**
- * Chooses a temporary evaluator directory outside dependencies and on the
- * config's volume.
+ * Places evaluator files under node_modules/.cache/evidence on the config's
+ * volume.
  *
- * Keeping the generated project on that volume permits valid relative links
- * when the system temp directory is on another drive.
+ * A dependency junction on another volume requires a local cache container so
+ * the compiler can import the config through a relative path.
  */
 async function tempBase(
   configFile: string,
   nodeModules: string | undefined,
 ): Promise<string> {
-  const system: string = await realpath(tmpdir());
-  if (
-    path.parse(system).root.toLowerCase() ===
-    path.parse(configFile).root.toLowerCase()
-  )
-    return system;
-  const root: string =
-    nodeModules === undefined ||
-    path.parse(nodeModules).root.toLowerCase() !==
-      path.parse(configFile).root.toLowerCase()
-      ? path.dirname(configFile)
-      : path.dirname(nodeModules);
-  const directory: string = path.join(root, ".tmp", "evidence-config");
+  const volume: string = path.parse(configFile).root.toLowerCase();
+  let root: string =
+    nodeModules ?? path.join(path.dirname(configFile), "node_modules");
+  if (path.parse(root).root.toLowerCase() !== volume) {
+    let ancestor: string = path.dirname(configFile);
+    for (;;) {
+      root = path.join(ancestor, "node_modules");
+      if (
+        !(await exists(root)) ||
+        path.parse(await realpath(root)).root.toLowerCase() === volume
+      )
+        break;
+      const parent: string = path.dirname(ancestor);
+      if (parent === ancestor)
+        throw new Error(`Cannot place the config evaluator cache on ${volume}`);
+      ancestor = parent;
+    }
+  }
+  const directory: string = path.join(root, ".cache", "evidence");
   await mkdir(directory, { recursive: true });
   return realpath(directory);
 }

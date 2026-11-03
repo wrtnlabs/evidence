@@ -461,7 +461,7 @@ The resolver never falls back to a project-wide name.
 
 Every family can be a claim and a reference and can cite every other.
 
-Analysis creates no temporary files or disk caches. Downloaded grammars are checked against their pinned size and SHA-256, shared in memory, and reused offline only within the same process. Each new process needs network access to its required grammars. `cacheDirectory` and `EVID_CACHE_DIR` are legacy memory namespace selectors and never name a directory that Evidence reads or writes. Explicit `init` and output-file options still write the requested destination.
+Downloaded grammars are checked against their pinned size and SHA-256, shared in memory, and reused offline only within the same process. Each new process needs network access to its required grammars. `cacheDirectory` and `EVID_CACHE_DIR` are legacy memory namespace selectors and never name a directory that Evidence reads or writes. Explicit `init` and output-file options still write the requested destination.
 
 Programming languages and SQL dialects parse through upstream Tree-sitter grammars, Prisma through its own parser, and Swagger as JSON or YAML. Adapters run no compiler, preprocessor, macro, or build; a construct that could change the public surface and cannot be resolved makes analysis incomplete.
 
