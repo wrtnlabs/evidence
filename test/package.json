@@ -1,6 +1,6 @@
 {
   "name": "@wrtnlabs/evidence-test",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "private": true,
   "description": "Evidence logic unit tests.",
   "main": "src/index.ts",
