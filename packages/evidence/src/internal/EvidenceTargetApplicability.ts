@@ -9,7 +9,7 @@ import type { IEvidenceTargetStatement } from "../structures/IEvidenceTargetStat
 import type { EvidenceDatabaseType } from "../typings/EvidenceDatabaseType";
 import type { EvidenceProgrammingType } from "../typings/EvidenceProgrammingType";
 import type { IEvidenceMaterializedReference } from "./IEvidenceMaterializedReference";
-import { EvidenceMarkdownTarget } from "../adapters/markdown/EvidenceMarkdownTarget";
+import { EvidenceRootedTarget } from "./EvidenceRootedTarget";
 
 /**
  * Chooses reference populations that can interpret an authored target.
@@ -32,9 +32,11 @@ export namespace EvidenceTargetApplicability {
    * order.
    *
    * A tag is retained for every tied viable population when syntax cannot
-   * distinguish the intended reference artifact.
+   * distinguish the intended reference artifact. A `METHOD:/path` spelling goes
+   * to Swagger unless a rooted reference selects the exact file it names, as a
+   * URL-keyed ledger row does.
    *
-   * @evidence contracts/common.md#principled-implementation Prisma and Swagger spellings route directly; otherwise exact inventory files score 3, recognized grammars 2, weak Markdown names or a single reference 1, and the highest decisive score wins.
+   * @evidence contracts/common.md#principled-implementation Prisma and Swagger spellings route directly; otherwise exact inventory files score 3, recognized grammars or conventional Markdown, CSV and TSV extensions 2, other rooted paths or a single reference 1, and the highest decisive score wins.
    * @evidence contracts/common.md#clear-and-simple-design Scoring helpers are private; select only compares scores and keeps configuration order.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Ties keep every viable reference instead of guessing one.
    * @evidence contracts/common.md#meaningful-documentation The comment explains tie retention.
@@ -52,7 +54,14 @@ export namespace EvidenceTargetApplicability {
       return references.filter(
         (entry) => entry.plan.population.type === "prisma",
       );
-    if (swaggerLike(statement.target))
+    // A row key may itself contain ':/', as in a URL-keyed link registry. An
+    // exact selected rooted file outranks the lexical Swagger guess.
+    if (
+      swaggerLike(statement.target) &&
+      !references.some((entry: IEvidenceMaterializedReference): boolean =>
+        rootedExact(statement.target, entry, indexes),
+      )
+    )
       return references.filter(
         (entry) => entry.plan.population.type === "swagger",
       );
@@ -90,15 +99,15 @@ function affinity(
 ): number {
   const type = reference.plan.population.type;
   if (type === "prisma" || type === "swagger") return 0;
-  if (type === "markdown") {
+  if (EvidenceRootedTarget.is(type)) {
     let file: string;
     try {
-      file = EvidenceMarkdownTarget.parse(target).file;
+      file = EvidenceRootedTarget.parse(type, target).file;
     } catch {
       return 0;
     }
-    const exact: boolean = indexes.markdown(reference.inventory).has(file);
-    return exact ? 3 : markdownLike(file) ? 2 : 1;
+    const exact: boolean = indexes.rooted(reference.inventory).has(file);
+    return exact ? 3 : EvidenceRootedTarget.conventional(type, file) ? 2 : 1;
   }
 
   const parsed = parseFileTargets(target, host);
@@ -110,6 +119,28 @@ function affinity(
     if (exact) return 3;
   }
   return isParsedType(type) && recognizes(type, targetFile(target)) ? 2 : 0;
+}
+
+/**
+ * Tests whether a rooted reference selects the exact file a target names.
+ *
+ * Only an exact selected path counts, so an unknown path still follows the
+ * ordinary grammar routing.
+ */
+function rootedExact(
+  target: string,
+  reference: IEvidenceMaterializedReference,
+  indexes: EvidenceTargetFileIndex,
+): boolean {
+  const type = reference.plan.population.type;
+  if (!EvidenceRootedTarget.is(type)) return false;
+  try {
+    return indexes
+      .rooted(reference.inventory)
+      .has(EvidenceRootedTarget.parse(type, target).file);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -193,17 +224,6 @@ function targetFile(target: string): string {
   } catch {
     return path.basename(encoded);
   }
-}
-
-/**
- * Identifies conventional Markdown names when no exact selected source is
- * known.
- *
- * This supplies a weak affinity signal for Markdown references without claiming
- * that the file exists in their inventory.
- */
-function markdownLike(file: string): boolean {
-  return /\.(?:md|markdown|mdx)$/iu.test(file);
 }
 
 /**

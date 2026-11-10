@@ -121,6 +121,7 @@ export interface IEvidenceClaimBase<
    * - Database: model, column, relation.
    * - Markdown: file, h1, h2, h3, h4.
    * - Swagger: operation.
+   * - CSV and TSV: row.
    *
    * This selects claim hosts; each reference selects the units they must cover.
    */

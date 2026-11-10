@@ -1,5 +1,6 @@
 /**
- * Certified adapters for supported programming and database artifacts.
+ * Certified adapters for supported programming, database, document, and ledger
+ * artifacts.
  *
  * Consumers select these adapters when constructing an explicit parsing
  * boundary. Configuration-driven checks select the appropriate adapter from the
@@ -11,6 +12,7 @@ export * from "./cpp/EvidenceCppAdapter";
 export * from "./csharp/EvidenceCSharpAdapter";
 export * from "./dart/EvidenceDartAdapter";
 export * from "./dbml/EvidenceDbmlAdapter";
+export * from "./delimited/EvidenceDelimitedAdapter";
 export * from "./go/EvidenceGoAdapter";
 export * from "./java/EvidenceJavaAdapter";
 export * from "./javascript/EvidenceJavaScriptAdapter";

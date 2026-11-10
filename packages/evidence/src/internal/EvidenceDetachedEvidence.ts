@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { EvidenceMarkdownTarget } from "../adapters/markdown/EvidenceMarkdownTarget";
+import { EvidenceRootedTarget } from "./EvidenceRootedTarget";
 import { EvidenceAnalysisIndexes } from "./EvidenceAnalysisIndexes";
 import type { EvidenceTargetResolverIndex } from "./EvidenceTargetResolverIndex";
 import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
@@ -92,15 +92,15 @@ export namespace EvidenceDetachedEvidence {
         EvidenceFileTarget.normalize(file.physicalPath),
       ),
     );
-    const markdownRootPaths: Map<string, string> = new Map<string, string>();
-    if (claim.type === "markdown")
+    const rootPaths: Map<string, string> = new Map<string, string>();
+    if (EvidenceRootedTarget.is(claim.type))
       for (const file of source.sources)
         for (const address of file.addresses) {
           const absolute: string = EvidenceFileTarget.normalize(
             address.absolute,
           );
-          if (address.selected !== false && !markdownRootPaths.has(absolute))
-            markdownRootPaths.set(absolute, address.relative);
+          if (address.selected !== false && !rootPaths.has(absolute))
+            rootPaths.set(absolute, address.relative);
         }
     const ownedFiles: Set<string> = new Set<string>(
       inventory.units
@@ -147,7 +147,7 @@ export namespace EvidenceDetachedEvidence {
       };
       const statement: IEvidenceTargetStatement = {
         hostId: unit.id,
-        target: ownerTarget(configFile, claim, markdownRootPaths, unit.name),
+        target: ownerTarget(configFile, claim, rootPaths, unit.name),
         location,
       };
       const result: IEvidenceTargetResolution = await resolver.resolve(
@@ -228,20 +228,25 @@ export namespace EvidenceDetachedEvidence {
   }
 }
 
-/** Converts a config-relative Markdown H1 path to the claim's root spelling. */
+/**
+ * Converts a config-relative H1 path to a rooted claim's root spelling.
+ *
+ * Markdown, CSV, and TSV claims address units from their root, while H1 owners
+ * are written relative to the configuration file.
+ */
 function ownerTarget(
   configFile: string,
   claim: IEvidenceClaim,
-  markdownRootPaths: ReadonlyMap<string, string>,
+  rootPaths: ReadonlyMap<string, string>,
   target: string,
 ): string {
-  if (claim.type !== "markdown") return target;
+  if (!EvidenceRootedTarget.is(claim.type)) return target;
   try {
-    const parsed = EvidenceMarkdownTarget.parse(target);
+    const parsed = EvidenceRootedTarget.parse(claim.type, target);
     const absolute: string = EvidenceFileTarget.normalize(
       path.resolve(path.dirname(configFile), parsed.file),
     );
-    const relative: string | undefined = markdownRootPaths.get(absolute);
+    const relative: string | undefined = rootPaths.get(absolute);
     if (relative !== undefined) {
       const hash: number = target.indexOf("#");
       return relative + (hash < 0 ? "" : target.slice(hash));

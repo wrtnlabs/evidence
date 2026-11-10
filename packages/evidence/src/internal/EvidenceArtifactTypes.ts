@@ -10,7 +10,7 @@ import type { EvidenceArtifactType } from "../typings/EvidenceArtifactType";
  *
  * @evidence contracts/common.md#principled-implementation The supported set is derived from registry entries that have certified adapters, so validation cannot accept a grammar-only candidate.
  * @evidence contracts/common.md#clear-and-simple-design The namespace owns the runtime set; the registry owns language metadata.
- * @evidence contracts/common.md#prohibited-implementation-shortcuts No type is hardcoded beyond the three document and schema families without registry entries.
+ * @evidence contracts/common.md#prohibited-implementation-shortcuts No type is hardcoded beyond the document, ledger and schema families without registry entries.
  * @evidence contracts/common.md#meaningful-documentation The namespace comment explains why validation uses this set instead of the identifier unions.
  * @evidenceExclude contracts/performance.md#efficient-algorithms The namespace's functions do linear scans of a list of about thirty entries; the namespace adds no algorithm.
  * @evidence contracts/performance.md#reuse-equivalent-work The supported list is computed once at module load and reused by every validation call.
@@ -55,9 +55,11 @@ export namespace EvidenceArtifactTypes {
 }
 
 const SUPPORTED: EvidenceArtifactType[] = [
+  "csv",
   "markdown",
   "prisma",
   "swagger",
+  "tsv",
   ...[
     ...EvidenceLanguageRegistry.list(),
     ...EvidenceLanguageRegistry.databases(),

@@ -5,10 +5,10 @@ import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
  * Indexes selected file membership for target-affinity scoring within one
  * immutable preparation session.
  *
- * @evidence contracts/common.md#principled-implementation Absolute paths and Markdown root-relative paths use their owning normalizers; dependency-only addresses are omitted.
+ * @evidence contracts/common.md#principled-implementation Absolute paths and root-relative Markdown, CSV and TSV paths use their owning normalizers; dependency-only addresses are omitted.
  * @evidence contracts/common.md#clear-and-simple-design Two spelling sets share one inventory scan and stay local to target-affinity preparation.
- * @evidence contracts/common.md#prohibited-implementation-shortcuts Only selected source aliases enter membership sets; absolute and Markdown-relative spellings use their existing artifact normalizers.
- * @evidence contracts/common.md#meaningful-documentation Comments distinguish selected absolute membership, root-relative Markdown membership and immutable preparation-session ownership.
+ * @evidence contracts/common.md#prohibited-implementation-shortcuts Only selected source aliases enter membership sets; absolute and root-relative spellings use their existing artifact normalizers.
+ * @evidence contracts/common.md#meaningful-documentation Comments distinguish selected absolute membership, root-relative document membership and immutable preparation-session ownership.
  * @evidence contracts/performance.md#efficient-algorithms Each inventory is scanned once; later membership is constant time.
  * @evidence contracts/performance.md#reuse-equivalent-work Weak inventory identity keys are valid only within the immutable session; standalone public selection creates a fresh owner.
  * @evidence contracts/performance.md#bound-retention-and-release-resources The preparation session owns the maps and releases them after its claims are prepared.
@@ -18,7 +18,7 @@ export class EvidenceTargetFileIndex {
   private readonly files: WeakMap<IEvidenceInventory, Set<string>> =
     new WeakMap();
 
-  /** Selected root-relative Markdown paths. */
+  /** Selected root-relative Markdown, CSV, and TSV paths. */
   private readonly relatives: WeakMap<IEvidenceInventory, Set<string>> =
     new WeakMap();
 
@@ -27,8 +27,8 @@ export class EvidenceTargetFileIndex {
    *
    * @evidence contracts/common.md#principled-implementation The shared builder records selected source addresses through EvidenceFileTarget normalization.
    * @evidence contracts/common.md#clear-and-simple-design Two spelling sets share one inventory scan and stay local to target-affinity preparation.
-   * @evidence contracts/common.md#prohibited-implementation-shortcuts Only selected source aliases enter membership sets; absolute and Markdown-relative spellings use their existing artifact normalizers.
-   * @evidence contracts/common.md#meaningful-documentation Comments distinguish selected absolute membership, root-relative Markdown membership and immutable preparation-session ownership.
+   * @evidence contracts/common.md#prohibited-implementation-shortcuts Only selected source aliases enter membership sets; absolute and root-relative spellings use their existing artifact normalizers.
+   * @evidence contracts/common.md#meaningful-documentation Comments distinguish selected absolute membership, root-relative document membership and immutable preparation-session ownership.
    * @evidence contracts/performance.md#efficient-algorithms One linear source-address pass on first use, then constant-time retrieval.
    * @evidence contracts/performance.md#reuse-equivalent-work The same immutable inventory reuses both absolute and relative sets within this preparation.
    * @evidence contracts/performance.md#bound-retention-and-release-resources The returned readonly set borrows this session and the weak entry dies with its inventory.
@@ -39,17 +39,18 @@ export class EvidenceTargetFileIndex {
   }
 
   /**
-   * Returns normalized selected root-relative Markdown paths.
+   * Returns normalized selected root-relative paths for Markdown and ledger
+   * targets.
    *
-   * @evidence contracts/common.md#principled-implementation The shared builder records selected logical aliases through Markdown normalization and omits dependency-only addresses.
+   * @evidence contracts/common.md#principled-implementation The shared builder records selected logical aliases through the root-relative normalization Markdown, CSV and TSV targets share, and omits dependency-only addresses.
    * @evidence contracts/common.md#clear-and-simple-design Two spelling sets share one inventory scan and stay local to target-affinity preparation.
-   * @evidence contracts/common.md#prohibited-implementation-shortcuts Only selected source aliases enter membership sets; absolute and Markdown-relative spellings use their existing artifact normalizers.
-   * @evidence contracts/common.md#meaningful-documentation Comments distinguish selected absolute membership, root-relative Markdown membership and immutable preparation-session ownership.
+   * @evidence contracts/common.md#prohibited-implementation-shortcuts Only selected source aliases enter membership sets; absolute and root-relative spellings use their existing artifact normalizers.
+   * @evidence contracts/common.md#meaningful-documentation Comments distinguish selected absolute membership, root-relative document membership and immutable preparation-session ownership.
    * @evidence contracts/performance.md#efficient-algorithms One linear source-address pass on first use, then constant-time retrieval.
    * @evidence contracts/performance.md#reuse-equivalent-work The same immutable inventory reuses both relative and absolute membership sets.
    * @evidence contracts/performance.md#bound-retention-and-release-resources The readonly set and weak entry live only within this preparation session.
    */
-  public markdown(inventory: IEvidenceInventory): ReadonlySet<string> {
+  public rooted(inventory: IEvidenceInventory): ReadonlySet<string> {
     this.index(inventory);
     return this.relatives.get(inventory) ?? new Set();
   }

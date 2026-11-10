@@ -7,6 +7,7 @@ export type * from "./EvidenceLanguageCandidateKind";
 export type * from "./EvidenceSymbol";
 export type * from "./EvidenceDatabaseSymbol";
 export type * from "./EvidenceDatabaseType";
+export type * from "./EvidenceDelimitedType";
 export type * from "./EvidenceMarkdownSymbol";
 export type * from "./EvidenceParserErrorCode";
 export type * from "./EvidenceProgrammingSymbol";

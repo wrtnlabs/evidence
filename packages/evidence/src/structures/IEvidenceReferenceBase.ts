@@ -50,8 +50,8 @@ export interface IEvidenceReferenceBase<
    *   resolve from that directory.
    * - Accepts absolute paths, directory symlinks, and Windows junctions.
    * - Names one directory, not a glob. Windows drive-relative paths are invalid.
-   * - Markdown citations use this root; programming citations use the citing
-   *   file. Prisma model addresses do not contain paths.
+   * - Markdown, CSV, and TSV citations use this root; programming citations use
+   *   the citing file. Prisma model addresses do not contain paths.
    */
   root?: string;
 
@@ -64,6 +64,7 @@ export interface IEvidenceReferenceBase<
    * - Database: model.
    * - Markdown: file, h1, h2, h3, h4.
    * - Swagger: operation.
+   * - CSV and TSV: row.
    *
    * Unselected structural ancestors remain addressable as aggregate targets.
    */
@@ -122,7 +123,9 @@ export interface IEvidenceReferenceBase<
    *   independently of reference selectors.
    * - TypeScript fingerprints include nested declarations, even withdrawn ones.
    *   Swagger uses normalized operation content; Prisma uses parsed
-   *   declarations without the documentation comments that carry reviews.
+   *   declarations without the documentation comments that carry reviews. CSV
+   *   and TSV rows use their header-to-value pairs without the evidence
+   *   column.
    * - This verifies the recorded review and fingerprint, not the truth of its
    *   prose.
    *

@@ -15,6 +15,7 @@ import type { IEvidenceQueryPopulation } from "../internal/IEvidenceQueryPopulat
 import { EvidenceQueryPopulationContext } from "../contexts/EvidenceQueryPopulationContext";
 import type { IEvidenceQueryContext } from "../contexts/IEvidenceQueryContext";
 import { EvidenceMarkdownTarget } from "../adapters/markdown/EvidenceMarkdownTarget";
+import { EvidenceRootedTarget } from "../internal/EvidenceRootedTarget";
 import type { IEvidenceCheckAnalysis } from "../structures/IEvidenceCheckAnalysis";
 import type { IEvidenceDeclaration } from "../structures/IEvidenceDeclaration";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
@@ -43,6 +44,7 @@ import type { IEvidenceTargetStatement } from "../structures/IEvidenceTargetStat
 import type { IEvidenceUnit } from "../structures/IEvidenceUnit";
 import type { EvidenceArtifactType } from "../typings/EvidenceArtifactType";
 import type { EvidenceCommandExitCode } from "../typings/EvidenceCommandExitCode";
+import type { EvidenceDelimitedType } from "../typings/EvidenceDelimitedType";
 import type { EvidenceGraphNode } from "../typings/EvidenceGraphNode";
 import type { EvidenceSymbol } from "../typings/EvidenceSymbol";
 import type { EvidenceUnitSelection } from "../typings/EvidenceUnitSelection";
@@ -845,8 +847,10 @@ export namespace EvidenceQueryProgrammer {
    * it.
    *
    * Prisma and Swagger have unmistakable target forms; file targets consult the
-   * installed registry. When inference finds no type, every population remains
-   * eligible so the resolver can return its own actionable diagnostics.
+   * installed registry. A `METHOD:/path` spelling stays with Swagger unless a
+   * rooted population selects the exact file it names, as a URL-keyed ledger
+   * row does. When inference finds no type, every population remains eligible
+   * so the resolver can return its own actionable diagnostics.
    */
   function applicablePopulations(
     populations: EvidenceQueryPopulationContext[],
@@ -856,13 +860,24 @@ export namespace EvidenceQueryProgrammer {
       return populations.filter(
         (population) => population.scope.type === "prisma",
       );
-    if (swaggerLike(target))
+    if (
+      swaggerLike(target) &&
+      !populations.some((population: EvidenceQueryPopulationContext) =>
+        rootedFileSelected(population, target),
+      )
+    )
       return populations.filter(
         (population) => population.scope.type === "swagger",
       );
     const file = targetFile(target);
     const types = new Set<EvidenceArtifactType>();
-    if (/\.(?:md|markdown|mdx)$/iu.test(file)) types.add("markdown");
+    const rooted: Array<"markdown" | EvidenceDelimitedType> = [
+      "markdown",
+      "csv",
+      "tsv",
+    ];
+    for (const type of rooted)
+      if (EvidenceRootedTarget.conventional(type, file)) types.add(type);
     for (const language of [
       ...EvidenceLanguageRegistry.list(),
       ...EvidenceLanguageRegistry.databases(),
@@ -877,6 +892,33 @@ export namespace EvidenceQueryProgrammer {
       types.has(population.scope.type),
     );
     return selected.length === 0 ? populations : selected;
+  }
+
+  /**
+   * Tests whether a rooted population selects the exact file a target names.
+   *
+   * Only consulted for Swagger-shaped spellings, so ordinary queries never pay
+   * for the source scan.
+   */
+  function rootedFileSelected(
+    population: EvidenceQueryPopulationContext,
+    target: string,
+  ): boolean {
+    const type: EvidenceArtifactType = population.scope.type;
+    if (!EvidenceRootedTarget.is(type)) return false;
+    let file: string;
+    try {
+      file = EvidenceRootedTarget.parse(type, target).file;
+    } catch {
+      return false;
+    }
+    return population.inventory.sources.some((source) =>
+      source.addresses.some(
+        (address) =>
+          address.selected !== false &&
+          EvidenceMarkdownTarget.normalize(address.relative) === file,
+      ),
+    );
   }
 
   /**
@@ -950,10 +992,10 @@ export namespace EvidenceQueryProgrammer {
   /**
    * Renders one indexed address with the target grammar of its population.
    *
-   * Prisma and Swagger do not use file-qualified accessors, while Markdown must
-   * preserve selected logical aliases for a physical file. Other artifacts are
-   * made CLI-relative; an unrenderable Swagger address is omitted from query
-   * output.
+   * Prisma and Swagger do not use file-qualified accessors, while Markdown,
+   * CSV, and TSV must preserve selected logical aliases for a physical file and
+   * keep their segment literal. Other artifacts are made CLI-relative; an
+   * unrenderable Swagger address is omitted from query output.
    */
   function formatAddress(
     population: EvidenceQueryPopulationContext,
@@ -967,7 +1009,7 @@ export namespace EvidenceQueryProgrammer {
       return segments.length === 1 && segments[0] !== undefined
         ? [segments[0]]
         : [];
-    if (population.scope.type === "markdown") {
+    if (EvidenceRootedTarget.is(population.scope.type)) {
       const logical: string[] =
         population.records.logicalFiles.get(
           EvidenceFileTarget.normalize(file),

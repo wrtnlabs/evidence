@@ -8,6 +8,7 @@ import { EvidenceArtifactTypes } from "./EvidenceArtifactTypes";
 import { EvidenceFileGlob } from "./EvidenceFileGlob";
 import { EvidenceSourcePath } from "./EvidenceSourcePath";
 import { EvidenceSwaggerRemoteReader } from "../adapters/swagger/EvidenceSwaggerRemoteReader";
+import { EvidenceDelimitedSyntax } from "../adapters/delimited/EvidenceDelimitedSyntax";
 
 /**
  * Collects all configuration contract violations before plan construction.
@@ -16,7 +17,7 @@ import { EvidenceSwaggerRemoteReader } from "../adapters/swagger/EvidenceSwagger
  * population policy mistakes together, including entries later disabled by
  * severity.
  *
- * @evidence contracts/common.md#principled-implementation Every claim and reference is validated (types against certified adapters, roots, globs through the real matcher, symbols against adapter metadata, Swagger sources, checklist compatibility) and all problems are reported together.
+ * @evidence contracts/common.md#principled-implementation Every claim and reference is validated (types against certified adapters, roots, globs through the real matcher, symbols against adapter metadata, Swagger sources, CSV and TSV column options, checklist compatibility) and all problems are reported together.
  * @evidence contracts/common.md#clear-and-simple-design Each concern has its own private validator that appends to one problem list.
  * @evidence contracts/common.md#prohibited-implementation-shortcuts Disabled and off entries are validated too, so reenabling cannot reveal hidden mistakes; checklist conflicts are refused rather than ignored.
  * @evidence contracts/common.md#meaningful-documentation The comment explains aggregate reporting; every private validator documents what it checks.
@@ -52,6 +53,10 @@ export function validateEvidenceConfig(
         claim.evidenceFiles,
       );
     validateSymbols(problems, `${claimPath}.symbol`, claim.symbol, claim.type);
+    if (claim.type === "csv" || claim.type === "tsv")
+      problems.push(
+        ...EvidenceDelimitedSyntax.optionProblems(claimPath, claim),
+      );
     if (claim.evidenceExcludeCarriers !== undefined)
       validateGlobs(
         problems,
@@ -81,6 +86,10 @@ export function validateEvidenceConfig(
       if (reference.type === "swagger")
         validateSwaggerSource(problems, `${base}.file`, reference.file);
       else validateGlobs(problems, `${base}.files`, reference.files);
+      if (reference.type === "csv" || reference.type === "tsv")
+        problems.push(
+          ...EvidenceDelimitedSyntax.optionProblems(base, reference),
+        );
 
       if (reference.type !== "markdown" && "checklist" in reference)
         problems.push(

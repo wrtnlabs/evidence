@@ -8,7 +8,7 @@ Every rule, requirement, schema, and API becomes an obligation the check enforce
 
 - **100% coverage** of every requirement.
 - **100% compliance** with every principle.
-- **20+ languages**, plus Markdown and Swagger.
+- **20+ languages**, plus Markdown, Swagger, and CSV/TSV ledgers.
 
 Modern AI already writes code, documents, and fiction well. The remaining bottleneck is not creation but adherence: an agent can understand a specification, ignore one constraint, and still declare the work complete ([_The Compliance Gap_](https://arxiv.org/abs/2605.01771)).
 
@@ -234,6 +234,50 @@ The same graph governs prose. Every layer cites its principles and settings; scr
 
 Editing a setting expires every review on it, so a revision leaves no stale scene behind.
 
+### 1.7. Ledgers
+
+Some projects keep their decisions in rows: a project ledger, a link registry, a requirement traceability matrix. A CSV or TSV reference makes every row an obligation addressed by its key, and a CSV or TSV claim lets every row answer one:
+
+```ts
+import type { IEvidenceConfig } from "@wrtnlabs/evidence";
+
+export default {
+  claims: [
+    {
+      name: "every decision cites the projects it changes",
+      type: "markdown",
+      files: ["decisions/*.md"],
+      symbol: "file",
+      reference: { type: "tsv", files: ["data/projects.tsv"], key: "id" },
+    },
+    {
+      name: "every project names exactly one goal",
+      type: "tsv",
+      files: ["data/projects.tsv"],
+      key: "id",
+      evidenceColumn: "evidence",
+      reference: {
+        type: "markdown",
+        files: ["context/goals.md"],
+        symbol: "h2",
+        singleEvidencePerSymbol: true,
+      },
+    },
+  ],
+} satisfies IEvidenceConfig;
+```
+
+```text
+id	title	evidence
+P3	Paid search	@evidence context/goals.md#growth Paid acquisition is this project's lever on growth.
+```
+
+```md
+<!-- @evidence data/projects.tsv#P3 This decision reallocates the creative budget owned by P3. -->
+```
+
+The row's address is its key, so inserting, deleting, or reordering other rows changes no address.
+
 ## 2. Benchmark
 
 ![Coverage and token spend across all four subjects](https://raw.githubusercontent.com/samchon/ttsc/gh-pages/benchmark/png/evidence-summary.png)
@@ -255,7 +299,7 @@ A **unit** is one declaration, even when several public addresses expose it. A f
 
 ### 3.1. Coverage
 
-- `@evidence` covers its target and the target's selected descendants: a class covers its methods, a model its columns, a Markdown file its sections, and a source or schema file such as `src/order.ts` each top-level declaration sited only in it, together with that declaration's members.
+- `@evidence` covers its target and the target's selected descendants: a class covers its methods, a model its columns, a Markdown file its sections, a CSV or TSV file its rows, and a source or schema file such as `src/order.ts` each top-level declaration sited only in it, together with that declaration's members.
 - `@evidenceExclude` covers the same way while recording that the target does not apply, so one tag on a file or owner retires everything beneath it. The two cannot overlap in one obligation.
 - A declaration merged from several files, such as a C# partial class, belongs to no single file. Cite or exclude it through its own target.
 - Source and schema file targets are specific to this package; `@ttsc/evidence` addresses only Markdown files.
@@ -311,8 +355,10 @@ Commands resolve configuration within the effective `--cwd` directory, preferrin
 
 | Property | Type | Default | Behavior |
 | --- | --- | --- | --- |
-| `type` | Artifact type | required | Selects the adapter: `typescript`, `rust`, `prisma`, `markdown`, `swagger`, and every other certified type. |
+| `type` | Artifact type | required | Selects the adapter: `typescript`, `rust`, `prisma`, `markdown`, `swagger`, `csv`, `tsv`, and every other certified type. |
 | `files` | `string[]` | required | Ordered globs relative to `root`; `!` excludes, a later pattern reincludes. |
+| `key` | `string \| string[]` | CSV and TSV: required | Header of the identity column, or headers of a composite key. |
+| `evidenceColumn` | `string` | none | CSV and TSV only. Header of the column whose cells carry annotations. |
 | `reference` | `IEvidenceReference \| IEvidenceReference[]` | required | One reference or an array of independent obligations. |
 | `name` | `string` | none | Labels diagnostics without merging claims. |
 | `severity` | `"error" \| "warning" \| "off"` | config, then `error` | `off` removes the claim; `warning` never fails the check. |
@@ -328,7 +374,8 @@ Commands resolve configuration within the effective `--cwd` directory, preferrin
 | --- | --- | --- | --- |
 | `type` | Artifact type | required | Selects the referenced adapter independently of the claim. |
 | `files` / `file` | `string[]` / `string` | required | Globs, or for a Swagger reference one local path or URL. |
-| `root` | `string` | config directory | Resolves reference files and Markdown targets; names one directory, not a glob. |
+| `key`, `evidenceColumn` | as for claims | CSV and TSV | Same column roles as a claim. When rows cite rows of the same ledger, repeat the claim's `evidenceColumn` so annotations stay out of row fingerprints. |
+| `root` | `string` | config directory | Resolves reference files and Markdown, CSV, and TSV targets; names one directory, not a glob. |
 | `symbol` | Symbol or nonempty array | family default | Selects the denominator. |
 | `severity` | Evidence severity | claim | `off` removes the reference. |
 | `noEvidenceExclude` | `boolean` | `false` | Exclusions fail and provide no coverage. |
@@ -345,6 +392,7 @@ Commands resolve configuration within the effective `--cwd` directory, preferrin
 | Markdown | `file`, `h1`, `h2`, `h3`, `h4` | all | all |
 | Database | `model`, `column`, `relation` | all | `model` |
 | Swagger | `operation` | `operation` | `operation` |
+| CSV, TSV | `row` | `row` | `row` |
 
 `type` chooses the language before file selection: `.h` follows `c`, `cpp`, or `objc`; `.sql` follows the configured dialect. Roots resolve from the config file; globs are case-sensitive, and a bare `src` selects nothing.
 
@@ -431,7 +479,9 @@ export default {
 The guide explains how the price is calculated.
 ```
 
-The H1 identifies the original code or Markdown unit, so its statements count for that unit. One document can contain H1 sections for several units or claims. Annotation targets keep their usual path bases: programming targets resolve from the evidence document, while Markdown targets resolve from the reference root. Native documentation and separate evidence can cover the same claim together; duplicate and review policies apply to their combined statements. When `requireReview` is enabled, place `@evidenceReview` in an HTML comment directly below the detached evidence heading. Keep `@evidenceExclude` and `@evidenceExcludeReview` on eligible original claim carriers. No matching document, an unresolved H1, a statement outside an H1, a detached exclusion, or selecting one file as both a claim source and separate evidence makes the check incomplete.
+For a CSV or TSV claim, the H1 names the row, such as `# data/projects.tsv#P3`; this suits ledgers written by batch jobs, where adding a prose column is impractical.
+
+The H1 identifies the original code, Markdown, or row unit, so its statements count for that unit. One document can contain H1 sections for several units or claims. Annotation targets keep their usual path bases: programming targets resolve from the evidence document, while Markdown targets resolve from the reference root. Native documentation and separate evidence can cover the same claim together; duplicate and review policies apply to their combined statements. When `requireReview` is enabled, place `@evidenceReview` in an HTML comment directly below the detached evidence heading. Keep `@evidenceExclude` and `@evidenceExcludeReview` on eligible original claim carriers. No matching document, an unresolved H1, a statement outside an H1, a detached exclusion, or selecting one file as both a claim source and separate evidence makes the check incomplete.
 
 ### 5.3. Target addresses
 
@@ -441,11 +491,12 @@ The H1 identifies the original code or Markdown unit, so its statements count fo
 | Instance member | `SomeClass.prototype.member` in TypeScript, JavaScript, and Python; `SomeClass.member` in other languages; `Shop.Sale.self.find` for Ruby singletons |
 | Literal segment | JSON-string brackets: `Namespace["member.with.dots"]`, ``Shop["Box`1"]``, `Sale["impl Service"].run`, `Widget["-send:to:"]` |
 | Markdown | `docs/requirements.md#anchor` from the reference root; `{#anchor}` wins, otherwise the lowercased heading |
+| CSV, TSV | `data/projects.tsv#P3` from the reference root; composite keys join with `:`, as in `data/links.csv#crm:sales`; the path alone cites every row |
 | Prisma | `prisma:Sale`, `prisma:Sale.price`, no path |
 | SQL and DBML | File-qualified: `schema.sql#app.item.id`; `evidence list` prints relation segments |
 | Swagger | `POST:/sales`, uppercase method and exact path |
 
-Markdown heading annotations belong to their own heading units; HTML-comment tags belong to the surrounding file or heading. Prisma tags go in `///` on models and fields. Swagger tags go in each operation's `description`. Aliases such as barrels add addresses without adding obligations.
+Markdown heading annotations belong to their own heading units; HTML-comment tags belong to the surrounding file or heading. Prisma tags go in `///` on models and fields. Swagger tags go in each operation's `description`. CSV and TSV tags, reviews included, go in the row's `evidenceColumn` cell. Aliases such as barrels add addresses without adding obligations.
 
 | Outcome | Meaning |
 | --- | --- |
@@ -463,7 +514,7 @@ Every family can be a claim and a reference and can cite every other.
 
 Downloaded grammars are checked against their pinned size and SHA-256, shared in memory, and reused offline only within the same process. Each new process needs network access to its required grammars. `cacheDirectory` and `EVID_CACHE_DIR` are legacy memory namespace selectors and never name a directory that Evidence reads or writes. Explicit `init` and output-file options still write the requested destination.
 
-Programming languages and SQL dialects parse through upstream Tree-sitter grammars, Prisma through its own parser, and Swagger as JSON or YAML. Adapters run no compiler, preprocessor, macro, or build; a construct that could change the public surface and cannot be resolved makes analysis incomplete.
+Programming languages and SQL dialects parse through upstream Tree-sitter grammars, Prisma through its own parser, Swagger as JSON or YAML, and CSV and TSV through their published grammars. Adapters run no compiler, preprocessor, macro, or build; a construct that could change the public surface and cannot be resolved makes analysis incomplete.
 
 Tree-sitter extraction failures report the checker's grammar or adapter boundary, not a verdict that the source violates its language's syntax. Incomplete extraction cannot certify coverage because it may have missed declarations.
 
@@ -550,6 +601,26 @@ Markdown yields one `file` unit and one per ATX `h1` to `h4`; H2-H4 annotation s
 
 Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` hosts tags. An operation's fingerprint covers its content, effective servers and security, and referenced local components. A reference by URL is fetched on every load.
 
+### 6.4. CSV and TSV
+
+`csv` reads [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180): comma-separated fields, where a field enclosed in double quotes may contain commas, line breaks, and doubled `""` quotes. `tsv` reads the [IANA `text/tab-separated-values`](https://www.iana.org/assignments/media-types/text/tab-separated-values) format: tab-separated fields with no quoting, so a `"` is ordinary data. The type, not the extension, selects the grammar. Files are UTF-8; a byte order mark is ignored, LF and CRLF both end a record, and empty lines are skipped.
+
+The first record is the header, and every name in it must be nonempty and unique. Each later record is one `row` unit beneath an addressable `file` unit. Its key is the trimmed value of the `key` column, or of each `key` column joined with `:`. Keys are case-sensitive, and their identity never depends on row order or line number.
+
+| Problem | Effect |
+| --- | --- |
+| No header record, a missing `key` or `evidenceColumn` header, or an empty or repeated header name | Reported at the header; the analysis is incomplete. |
+| Empty key, duplicate key, or a key containing whitespace, a control or format character, `#`, `"`, or (in a composite part) `:` | Reported at every affected row, which gets no unit; incomplete. |
+| A row with more or fewer fields than the header | Reported at the row; incomplete. |
+| An unterminated quote, a quote inside an unquoted field, or text after a closing quote (CSV) | Reported at the field; incomplete. |
+| A malformed annotation in an evidence cell | Reported at the cell, like any other annotation. |
+
+Rows carry evidence in the `evidenceColumn` cell, in `evidenceFiles`, or both. A cell holds zero or more annotations: a tag at the start of the cell or after whitespace starts the next annotation, because a TSV cell cannot hold a line break. Text before the first tag is an error; keep notes in another column. Every row is a host whether or not its cell has a tag, so `checklist` and `singleEvidencePerSymbol` see unanswered rows. A checklist owes `rows × items` answers, so prefer `evidenceFiles` or a narrower `files` glob for large ledgers.
+
+A row's fingerprint covers its header-to-value pairs except the evidence column. Editing a value or renaming a header expires its reviews; editing annotations, reordering columns, changing CSV quoting style, or editing other rows does not.
+
+Rows cannot filter themselves out of a population and form no hierarchy among themselves. A row that no longer applies, such as an archived project, needs an `@evidenceExclude` with its reason, so a status edit cannot silently shrink what must be covered.
+
 ## 7. CLI
 
 | Command | Purpose | Formats |
@@ -577,7 +648,7 @@ Swagger 2.0 and OpenAPI 3.x yield `METHOD:/path` operations whose `description` 
 
 Exit 0 is a complete analysis without errors, 1 is a complete analysis with violations, 2 is an invalid command or incomplete analysis. JSON reports carry `schemaVersion: 1`.
 
-Use `--only` with one or more targets printed by `evidence list`, using the same addressing rules as `evidence inspect`. Markdown targets are relative to the configured reference root; programming targets are relative to `--cwd`. Prisma and Swagger retain their artifact-specific target forms.
+Use `--only` with one or more targets printed by `evidence list`, using the same addressing rules as `evidence inspect`. Markdown, CSV, and TSV targets are relative to the configured reference root; programming targets are relative to `--cwd`. Prisma and Swagger retain their artifact-specific target forms.
 
 Focused checks use the complete analysis before selecting their results, because duplicate evidence, shared annotations and review freshness can depend on other units. `inspect` retains the complete check diagnostics. Reuse an `EvidenceQuery` instance to inspect several targets from one captured analysis; its address and fingerprint indexes are shared across queries, and returned reports remain independent copies.
 
