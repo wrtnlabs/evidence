@@ -1,4 +1,5 @@
 import type { IEvidenceDatabaseReference } from "./IEvidenceDatabaseReference";
+import type { IEvidenceDelimitedReference } from "./IEvidenceDelimitedReference";
 import type { IEvidenceMarkdownReference } from "./IEvidenceMarkdownReference";
 import type { IEvidenceProgrammingReference } from "./IEvidenceProgrammingReference";
 import type { IEvidenceSwaggerReference } from "./IEvidenceSwaggerReference";
@@ -20,6 +21,7 @@ import type { IEvidenceSwaggerReference } from "./IEvidenceSwaggerReference";
  */
 export type IEvidenceReference =
   | IEvidenceDatabaseReference
+  | IEvidenceDelimitedReference
   | IEvidenceMarkdownReference
   | IEvidenceProgrammingReference
   | IEvidenceSwaggerReference;

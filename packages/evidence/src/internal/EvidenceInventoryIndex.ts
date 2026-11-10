@@ -902,11 +902,13 @@ export class EvidenceInventoryIndex {
 /**
  * Artifact types whose units never receive a synthesized file unit.
  *
- * Markdown publishes its own file unit, and Prisma and Swagger address
- * schema-wide identities that no single file owns.
+ * Markdown, CSV, and TSV publish their own file units, and Prisma and Swagger
+ * address schema-wide identities that no single file owns.
  */
 const UNSCOPED_TYPES: ReadonlySet<string> = new Set([
+  "csv",
   "markdown",
   "prisma",
   "swagger",
+  "tsv",
 ]);

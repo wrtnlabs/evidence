@@ -5,6 +5,7 @@ import { EvidenceBigQueryAdapter } from "../adapters/bigquery/EvidenceBigQueryAd
 import { EvidenceCppAdapter } from "../adapters/cpp/EvidenceCppAdapter";
 import { EvidenceCSharpAdapter } from "../adapters/csharp/EvidenceCSharpAdapter";
 import { EvidenceDbmlAdapter } from "../adapters/dbml/EvidenceDbmlAdapter";
+import { EvidenceDelimitedAdapter } from "../adapters/delimited/EvidenceDelimitedAdapter";
 import { EvidenceGoAdapter } from "../adapters/go/EvidenceGoAdapter";
 import { EvidenceJavaAdapter } from "../adapters/java/EvidenceJavaAdapter";
 import { EvidenceJavaScriptAdapter } from "../adapters/javascript/EvidenceJavaScriptAdapter";
@@ -27,6 +28,7 @@ import { EvidenceSwaggerAdapter } from "../adapters/swagger/EvidenceSwaggerAdapt
 import { EvidenceTypeScriptAdapter } from "../adapters/typescript/EvidenceTypeScriptAdapter";
 import { EvidenceZigAdapter } from "../adapters/zig/EvidenceZigAdapter";
 import type { IEvidenceAdapter } from "../structures/IEvidenceAdapter";
+import type { IEvidenceDelimitedOptions } from "../structures/IEvidenceDelimitedOptions";
 import type { EvidenceArtifactType } from "../typings/EvidenceArtifactType";
 
 /**
@@ -48,20 +50,32 @@ export namespace EvidenceAdapterFactory {
    * Creates the dedicated adapter for a validated artifact discriminator.
    *
    * Each call returns a fresh instance so parser and scan state cannot cross an
-   * inventory boundary.
+   * inventory boundary. CSV and TSV need the population's key and evidence
+   * column; every other type ignores `options`.
    *
-   * @evidence contracts/common.md#principled-implementation An overload preserves the requested artifact type in the return type, and the implementation returns a fresh adapter per call.
-   * @evidence contracts/common.md#clear-and-simple-design The function only constructs; it neither configures nor caches adapters.
-   * @evidence contracts/common.md#prohibited-implementation-shortcuts An unmapped type throws with the reason rather than returning a partial adapter.
-   * @evidence contracts/common.md#meaningful-documentation The comment explains why each call returns a fresh instance.
-   * @evidence contracts/performance.md#efficient-algorithms A fixed chain of at most twenty-eight comparisons selects the constructor.
+   * @evidence contracts/common.md#principled-implementation An overload preserves the requested artifact type in the return type, and the implementation returns a fresh adapter per call, passing column options only to the delimited adapter.
+   * @evidence contracts/common.md#clear-and-simple-design The function only constructs; it neither validates configuration nor caches adapters.
+   * @evidence contracts/common.md#prohibited-implementation-shortcuts An unmapped type, or a delimited type without column options, throws with the reason rather than returning a partial adapter.
+   * @evidence contracts/common.md#meaningful-documentation The comment explains fresh instances and which types consume options.
+   * @evidence contracts/performance.md#efficient-algorithms A fixed chain of at most thirty comparisons selects the constructor.
    * @evidenceExclude contracts/performance.md#reuse-equivalent-work Adapters are deliberately not shared so parser and scan state cannot cross inventories.
    * @evidence contracts/performance.md#bound-retention-and-release-resources The new adapter is owned by the caller for one analysis; the factory keeps no reference.
    */
   export function create<Type extends EvidenceArtifactType>(
     type: Type,
+    options?: IEvidenceDelimitedOptions,
   ): IEvidenceAdapter<Type>;
-  export function create(type: EvidenceArtifactType): IEvidenceAdapter {
+  export function create(
+    type: EvidenceArtifactType,
+    options?: IEvidenceDelimitedOptions,
+  ): IEvidenceAdapter {
+    if (type === "csv" || type === "tsv") {
+      if (options === undefined)
+        throw new Error(
+          `Artifact type '${type}' needs key column options to build row units.`,
+        );
+      return new EvidenceDelimitedAdapter(type, options);
+    }
     if (type === "objc") return new EvidenceObjcAdapter();
     if (type === "dart") return new EvidenceDartAdapter();
     if (type === "c") return new EvidenceCAdapter();

@@ -4,7 +4,9 @@ import { EvidenceAccessor } from "../targets/EvidenceAccessor";
 import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
 import type { EvidenceInventoryIndex } from "./EvidenceInventoryIndex";
 import { EvidenceInventoryMerge } from "../internal/EvidenceInventoryMerge";
+import { EvidenceDelimitedSyntax } from "../adapters/delimited/EvidenceDelimitedSyntax";
 import { EvidenceMarkdownTarget } from "../adapters/markdown/EvidenceMarkdownTarget";
+import { EvidenceRootedTarget } from "./EvidenceRootedTarget";
 import { EvidencePrismaTarget } from "../adapters/prisma/EvidencePrismaTarget";
 import { EvidenceSwaggerTarget } from "../adapters/swagger/EvidenceSwaggerTarget";
 import type { IEvidenceTargetCandidate } from "../internal/IEvidenceTargetCandidate";
@@ -108,13 +110,13 @@ export class EvidenceTargetResolverIndex {
   private readonly publicFiles = new Map<string, Set<string>>();
 
   /**
-   * Selected Markdown roots grouped by Markdown's root-relative path spelling.
+   * Selected rooted-document files grouped by their root-relative spelling.
    *
-   * Markdown targets are intentionally resolved from reference roots rather
-   * than relative to the documentation host, so one logical target may map to
-   * several physical selected files before ambiguity is decided.
+   * Markdown, CSV, and TSV targets are intentionally resolved from reference
+   * roots rather than relative to the documentation host, so one logical target
+   * may map to several physical selected files before ambiguity is decided.
    */
-  private readonly markdownFiles = new Map<string, Set<string>>();
+  private readonly rootedFiles = new Map<string, Set<string>>();
 
   /**
    * Builds lookup state for one reference's inventory snapshots.
@@ -151,27 +153,28 @@ export class EvidenceTargetResolverIndex {
       }
       spellings.add(address.file);
     }
-    // Markdown references are rooted at selected source addresses. Identify their
-    // physical sources first so non-Markdown files cannot enter this path map.
-    const markdownSources = new Set(
-      this.inventory.units
-        .filter((unit) => unit.type === "markdown")
-        .flatMap((unit) =>
-          unit.sites.map((site) => EvidenceFileTarget.normalize(site.file)),
-        ),
+    // Markdown and ledger references are rooted at selected source addresses.
+    // Identify their physical sources first so other files cannot enter this map.
+    // A ledger has one site per row in one file; normalize each distinct path once.
+    const rootedSites: Set<string> = new Set();
+    for (const unit of this.inventory.units)
+      if (EvidenceRootedTarget.is(unit.type))
+        for (const site of unit.sites) rootedSites.add(site.file);
+    const rootedSources: Set<string> = new Set(
+      Array.from(rootedSites, (file: string): string =>
+        EvidenceFileTarget.normalize(file),
+      ),
     );
     for (const source of this.inventory.sources) {
-      if (
-        !markdownSources.has(EvidenceFileTarget.normalize(source.physicalPath))
-      )
+      if (!rootedSources.has(EvidenceFileTarget.normalize(source.physicalPath)))
         continue;
       for (const address of source.addresses) {
         if (address.selected === false) continue;
         const relative = EvidenceMarkdownTarget.normalize(address.relative);
-        let files = this.markdownFiles.get(relative);
+        let files = this.rootedFiles.get(relative);
         if (files === undefined) {
           files = new Set<string>();
-          this.markdownFiles.set(relative, files);
+          this.rootedFiles.set(relative, files);
         }
         files.add(address.absolute);
       }
@@ -182,8 +185,9 @@ export class EvidenceTargetResolverIndex {
    * Resolves one statement using its owning host and selected unit IDs.
    *
    * The host must match the statement because diagnostics and relative origins
-   * belong to that attachment. Specialized Markdown, Prisma, and Swagger target
-   * forms are parsed only for a uniquely identified artifact type. Ordinary
+   * belong to that attachment. Specialized Markdown, CSV, TSV, Prisma, and
+   * Swagger target forms are parsed only for a uniquely identified artifact
+   * type. Ordinary
    * file targets are attempted for each declared host origin, then deduplicated
    * before index lookup and filesystem classification.
    *
@@ -226,12 +230,13 @@ export class EvidenceTargetResolverIndex {
     const type = this.referenceType(ids);
     const addresses: IEvidenceAddress[] = [];
     try {
-      if (type === "markdown") {
-        const target = EvidenceMarkdownTarget.parse(statement.target);
-        for (const file of this.markdownFiles.get(target.file) ?? [])
+      if (EvidenceRootedTarget.is(type)) {
+        const target = EvidenceRootedTarget.parse(type, statement.target);
+        for (const file of this.rootedFiles.get(target.file) ?? [])
           addresses.push({ file, segments: target.segments });
         if (addresses.length === 0) {
           if (!this.inventory.complete) return this.incomplete(statement, []);
+          const label: string = EvidenceRootedTarget.label(type);
           return this.failure(
             "missing-file",
             [],
@@ -240,8 +245,8 @@ export class EvidenceTargetResolverIndex {
             this.diagnostic(
               statement,
               "target-missing-file",
-              `Markdown target file '${target.file}' is not among the selected reference files.`,
-              "Correct the root-relative Markdown path or include that file in the reference.",
+              `${label} target file '${target.file}' is not among the selected reference files.`,
+              `Correct the root-relative ${label} path or include that file in the reference.`,
             ),
           );
         }
@@ -290,7 +295,7 @@ export class EvidenceTargetResolverIndex {
           resolution: this.index.resolve(address, ids),
         }),
       );
-      return this.resolveCandidates(statement, uniqueAddresses, candidates);
+      return this.resolveCandidates(statement, uniqueAddresses, candidates, type);
     }
     const candidates: IEvidenceTargetCandidate[] = [];
     for (const address of uniqueAddresses) {
@@ -307,7 +312,7 @@ export class EvidenceTargetResolverIndex {
         });
     }
     if (candidates.length !== 0)
-      return this.resolveCandidates(statement, uniqueAddresses, candidates);
+      return this.resolveCandidates(statement, uniqueAddresses, candidates, type);
 
     // No selected address matched. Inspect the explicit candidate paths only to
     // distinguish a missing file from a known but out-of-population source.
@@ -362,6 +367,7 @@ export class EvidenceTargetResolverIndex {
     statement: IEvidenceTargetStatement,
     addresses: IEvidenceAddress[],
     candidates: IEvidenceTargetCandidate[],
+    type: EvidenceArtifactType | undefined,
   ): IEvidenceTargetResolution {
     const units = this.uniqueUnits(
       candidates.flatMap((candidate) => candidate.resolution.units),
@@ -416,6 +422,7 @@ export class EvidenceTargetResolverIndex {
     // ordinary candidate resolution found no selected semantic identity.
     const prisma = addresses.every((address) => address.file === "prisma:");
     const swagger = addresses.every((address) => address.file === "swagger:");
+    const ledger: boolean = EvidenceDelimitedSyntax.is(type);
     return this.failure(
       "missing-member",
       addresses,
@@ -428,12 +435,16 @@ export class EvidenceTargetResolverIndex {
           ? `The selected Prisma schema has no public selected address '${statement.target}'.`
           : swagger
             ? `The selected Swagger document has no operation '${statement.target}'.`
-            : `Selected target file '${this.files(addresses)}' has no public selected address '${this.formatAccessor(addresses)}'.`,
+            : ledger
+              ? `Selected target file '${this.files(addresses)}' has no selected row keyed '${addresses[0]?.segments[0] ?? ""}'.`
+              : `Selected target file '${this.files(addresses)}' has no public selected address '${this.formatAccessor(addresses)}'.`,
         prisma
           ? "Correct the model or member name, or include its symbol kind in this reference."
           : swagger
             ? "Correct the uppercase method or exact path, or select the intended Swagger document."
-            : "Correct the accessor, export a supported public declaration, or include its symbol kind in this reference.",
+            : ledger
+              ? "Correct the row key; composite keys join their configured columns with ':'."
+              : "Correct the accessor, export a supported public declaration, or include its symbol kind in this reference.",
       ),
     );
   }

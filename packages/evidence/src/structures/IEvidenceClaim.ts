@@ -1,4 +1,5 @@
 import type { IEvidenceDatabaseClaim } from "./IEvidenceDatabaseClaim";
+import type { IEvidenceDelimitedClaim } from "./IEvidenceDelimitedClaim";
 import type { IEvidenceMarkdownClaim } from "./IEvidenceMarkdownClaim";
 import type { IEvidenceProgrammingClaim } from "./IEvidenceProgrammingClaim";
 import type { IEvidenceSwaggerClaim } from "./IEvidenceSwaggerClaim";
@@ -7,7 +8,7 @@ import type { IEvidenceSwaggerClaim } from "./IEvidenceSwaggerClaim";
  * Artifact-specific populations that owe evidence to configured references.
  *
  * The type discriminator chooses extraction and host rules for code, schemas,
- * Markdown, or API operations. Each claim retains its own policy and reference
+ * Markdown, API operations, or ledger rows. Each claim retains its own policy and reference
  * boundaries even when another claim selects the same physical files.
  *
  * @evidence contracts/common.md#principled-implementation A union discriminated by type selects extraction and host rules for each artifact family.
@@ -20,6 +21,7 @@ import type { IEvidenceSwaggerClaim } from "./IEvidenceSwaggerClaim";
  */
 export type IEvidenceClaim =
   | IEvidenceDatabaseClaim
+  | IEvidenceDelimitedClaim
   | IEvidenceMarkdownClaim
   | IEvidenceProgrammingClaim
   | IEvidenceSwaggerClaim;

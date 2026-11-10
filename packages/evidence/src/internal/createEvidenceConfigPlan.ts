@@ -117,6 +117,7 @@ function symbols(
       : [population.symbol];
   if (population.type === "markdown") return ["file", "h1", "h2", "h3", "h4"];
   if (population.type === "swagger") return ["operation"];
+  if (population.type === "csv" || population.type === "tsv") return ["row"];
   if (DATABASE_TYPES.has(population.type))
     return reference ? ["model"] : ["model", "column", "relation"];
   const supported: EvidenceSymbol[] = EvidenceLanguageRegistry.list().find(

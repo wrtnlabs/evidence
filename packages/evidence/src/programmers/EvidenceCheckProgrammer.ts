@@ -76,7 +76,7 @@ export namespace EvidenceCheckProgrammer {
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Selection uses only configured symbol kinds, so structural ancestors never become extra obligations.
    * @evidence contracts/common.md#meaningful-documentation The comment explains ordering, concurrent loading and shared detached owner validation.
    * @evidence contracts/performance.md#efficient-algorithms Loads run concurrently; cross-claim orphan detection scans the resolved H1 records once per claim.
-   * @evidence contracts/performance.md#reuse-equivalent-work Populations with the same type, root and file selection share one immutable load within a materialization; claim-local diagnostic arrays are copied before appending, so identical selections are scanned and parsed once.
+   * @evidence contracts/performance.md#reuse-equivalent-work Populations with the same type, root, file selection and CSV/TSV column options share one immutable load within a materialization; claim-local diagnostic arrays are copied before appending, so identical selections are scanned and parsed once.
    * @evidence contracts/performance.md#bound-retention-and-release-resources Inventories are owned by the returned claims; adapters and collectors release their resources before returning. The shared-load map is local to one call and released when it returns.
    */
   export async function materialize(
@@ -305,10 +305,10 @@ export namespace EvidenceCheckProgrammer {
    * Loads a population once per distinct selection and borrows its immutable
    * records.
    *
-   * The key is everything that decides adapter input: artifact type, root, and
-   * the file globs or Swagger document. Equal keys within one materialization
-   * share a single load, and consumers borrow records; claim preparation copies
-   * its diagnostic array.
+   * The key is everything that decides adapter output: artifact type, root, the
+   * file globs or Swagger document, and for CSV and TSV the key and evidence
+   * columns. Equal keys within one materialization share a single load, and
+   * consumers borrow records; claim preparation copies its diagnostic array.
    */
   async function shared(
     loads: Map<string, Promise<IEvidenceInventory>>,
@@ -320,6 +320,8 @@ export namespace EvidenceCheckProgrammer {
       population.root ?? null,
       "files" in population ? population.files : null,
       "file" in population ? population.file : null,
+      "key" in population ? population.key : null,
+      "key" in population ? (population.evidenceColumn ?? null) : null,
     ]);
     let pending: Promise<IEvidenceInventory> | undefined = loads.get(key);
     if (pending === undefined) {
@@ -336,7 +338,8 @@ export namespace EvidenceCheckProgrammer {
    * File-backed Swagger is exceptional because its adapter owns direct document
    * loading. Every other population first expands source globs relative to the
    * configuration file, then transfers the resulting source snapshot to the
-   * selected adapter for analysis.
+   * selected adapter for analysis; CSV and TSV adapters also receive the
+   * population's column options.
    */
   async function load(
     configFile: string,
@@ -348,7 +351,10 @@ export namespace EvidenceCheckProgrammer {
         population.file,
         population.root,
       );
-    const adapter = EvidenceAdapterFactory.create(population.type);
+    const adapter = EvidenceAdapterFactory.create(
+      population.type,
+      "key" in population ? population : undefined,
+    );
     return adapter.analyze(
       await EvidenceSourceLoader.glob(configFile, {
         ...(population.root === undefined ? {} : { root: population.root }),
