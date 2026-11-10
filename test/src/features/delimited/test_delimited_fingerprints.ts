@@ -30,8 +30,8 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * 3. Change one of its values and rename one header; require new fingerprints.
  * 4. Fingerprint the file aggregate; require it to change with any row value.
  * 5. Evaluate a Markdown claim that reviews the row with `requireReview`; require
- *    success with the current fingerprint, success after an evidence-cell
- *    edit, and a stale-review diagnostic after a value edit.
+ *    success with the current fingerprint, success after an evidence-cell edit,
+ *    and a stale-review diagnostic after a value edit.
  *
  * @evidence contracts/testing.md#behavioral-verification Analyzes ledger variants, compares EvidenceFingerprint results, and evaluates a requireReview graph against current and stale row content.
  * @evidence contracts/testing.md#independent-expectations Equality expectations follow the stated rule that only header-to-value pairs outside the evidence column are reviewed content; the graph expectations follow the README review contract.
@@ -51,9 +51,15 @@ export async function test_delimited_fingerprints(): Promise<void> {
       "quoting style",
       'id,owner,evidence,goal\n"P1","ann","","growth"\nP2,bob,,reach\n',
     ],
-    ["CRLF line endings", "id,owner,evidence,goal\r\nP1,ann,,growth\r\nP2,bob,,reach\r\n"],
+    [
+      "CRLF line endings",
+      "id,owner,evidence,goal\r\nP1,ann,,growth\r\nP2,bob,,reach\r\n",
+    ],
     ["column order", "goal,id,evidence,owner\ngrowth,P1,,ann\nreach,P2,,bob\n"],
-    ["sibling row", "id,owner,evidence,goal\nP1,ann,,growth\nP2,carol,,reach\n"],
+    [
+      "sibling row",
+      "id,owner,evidence,goal\nP1,ann,,growth\nP2,carol,,reach\n",
+    ],
     ["row order", "id,owner,evidence,goal\nP2,bob,,reach\nP1,ann,,growth\n"],
   ] satisfies Array<[string, string]>)
     TestValidator.equals(
@@ -139,16 +145,14 @@ function requireUnit(
 ): IEvidenceUnit {
   const unit: IEvidenceUnit | undefined = inventory.units.find(
     (candidate: IEvidenceUnit): boolean =>
-      candidate.symbol === symbol && (symbol === "file" || candidate.name === "P1"),
+      candidate.symbol === symbol &&
+      (symbol === "file" || candidate.name === "P1"),
   );
   if (unit === undefined) throw new Error(`Missing ${symbol} fixture unit.`);
   return unit;
 }
 
-/**
- * Evaluates a Markdown claim that cites and reviews row P1 under
- * requireReview.
- */
+/** Evaluates a Markdown claim that cites and reviews row P1 under requireReview. */
 async function review(
   recorded: string,
   ledger: string,

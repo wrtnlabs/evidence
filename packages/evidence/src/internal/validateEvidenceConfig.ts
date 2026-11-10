@@ -54,7 +54,9 @@ export function validateEvidenceConfig(
       );
     validateSymbols(problems, `${claimPath}.symbol`, claim.symbol, claim.type);
     if (claim.type === "csv" || claim.type === "tsv")
-      problems.push(...EvidenceDelimitedSyntax.optionProblems(claimPath, claim));
+      problems.push(
+        ...EvidenceDelimitedSyntax.optionProblems(claimPath, claim),
+      );
     if (claim.evidenceExcludeCarriers !== undefined)
       validateGlobs(
         problems,

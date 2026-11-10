@@ -20,7 +20,11 @@ import type { IEvidenceDelimitedOptions } from "./IEvidenceDelimitedOptions";
  *     files: ["data/projects.tsv"],
  *     key: "id",
  *     evidenceColumn: "evidence",
- *     reference: { type: "markdown", files: ["context/goals.md"], symbol: "h2" },
+ *     reference: {
+ *       type: "markdown",
+ *       files: ["context/goals.md"],
+ *       symbol: "h2",
+ *     },
  *   };
  *
  * @evidence contracts/common.md#principled-implementation The claim base is specialized with the delimited discriminators and the row symbol, and the shared column options supply identity and carrier.
@@ -32,5 +36,6 @@ import type { IEvidenceDelimitedOptions } from "./IEvidenceDelimitedOptions";
  * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources A type declaration acquires and holds no runtime resource.
  */
 export interface IEvidenceDelimitedClaim
-  extends IEvidenceClaimBase<EvidenceDelimitedType, "row">,
+  extends
+    IEvidenceClaimBase<EvidenceDelimitedType, "row">,
     IEvidenceDelimitedOptions {}

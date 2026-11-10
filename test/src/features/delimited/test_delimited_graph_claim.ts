@@ -272,7 +272,8 @@ function ledger(first: string, second: string): string {
 function boundaries(analysis: IEvidenceCheckAnalysis): string[] {
   return analysis.report.diagnostics
     .filter(
-      (diagnostic: IEvidenceDiagnostic): boolean => diagnostic.severity === "error",
+      (diagnostic: IEvidenceDiagnostic): boolean =>
+        diagnostic.severity === "error",
     )
     .map(
       (diagnostic: IEvidenceDiagnostic): string =>

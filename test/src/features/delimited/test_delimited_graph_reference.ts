@@ -12,11 +12,11 @@ import { join } from "node:path";
 import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
 
 /**
- * Requires documents and code to acknowledge ledger rows through configured
- * CSV and TSV references.
+ * Requires documents and code to acknowledge ledger rows through configured CSV
+ * and TSV references.
  *
- * 1. Check a Markdown decision that cites one of two TSV rows; require one
- *    missing acknowledgement located on the uncited row's line in the ledger.
+ * 1. Check a Markdown decision that cites one of two TSV rows; require one missing
+ *    acknowledgement located on the uncited row's line in the ledger.
  * 2. Cite the TSV file aggregate instead; require both rows covered.
  * 3. Cite both rows, then reorder them and insert a new row; require the cited
  *    rows to stay covered and only the inserted row to be missing.
@@ -62,7 +62,10 @@ export async function test_delimited_graph_reference(): Promise<void> {
           )
           .map((diagnostic: IEvidenceDiagnostic): string =>
             [
-              (diagnostic.location?.file ?? "").replaceAll("\\", "/").split("/").at(-1),
+              (diagnostic.location?.file ?? "")
+                .replaceAll("\\", "/")
+                .split("/")
+                .at(-1),
               diagnostic.location?.range?.start.line,
             ].join(":"),
           ),

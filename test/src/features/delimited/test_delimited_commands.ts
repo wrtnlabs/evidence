@@ -17,11 +17,11 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  * Drives row units through the public list, inspect, graph, and focused-check
  * commands.
  *
- * 1. List a CSV reference ledger; require selected row items with
- *    root-relative `path#key` targets, the file as an ancestor, and the row's
- *    line as its location; then filter by `--language csv --kind row`.
- * 2. Inspect every listed row target and the file target; require each to
- *    resolve to its listed unit.
+ * 1. List a CSV reference ledger; require selected row items with root-relative
+ *    `path#key` targets, the file as an ancestor, and the row's line as its
+ *    location; then filter by `--language csv --kind row`.
+ * 2. Inspect every listed row target and the file target; require each to resolve
+ *    to its listed unit.
  * 3. Export the graph; require row nodes and the acknowledgement edge.
  * 4. Run `--only` on the cited row and on the uncited row; require exit 0 and 1
  *    with counts limited to that row, while the full check exits 1.
@@ -56,9 +56,10 @@ export async function test_delimited_commands(): Promise<void> {
         "<!-- @evidence links.csv#crm:sales The sales dashboard funds this decision. -->\n",
     },
     async (directory: string): Promise<void> => {
-      const listing: IEvidenceListReport = typia.json.assertParse<IEvidenceListReport>(
-        (await run(directory, ["list", "--format", "json"])).stdout,
-      );
+      const listing: IEvidenceListReport =
+        typia.json.assertParse<IEvidenceListReport>(
+          (await run(directory, ["list", "--format", "json"])).stdout,
+        );
       const rows: IEvidenceListItem[] = listing.items.filter(
         (item: IEvidenceListItem): boolean => item.scope.role === "reference",
       );
@@ -80,7 +81,8 @@ export async function test_delimited_commands(): Promise<void> {
         ],
       );
       const ops: IEvidenceListItem | undefined = rows.find(
-        (item: IEvidenceListItem): boolean => item.target === "links.csv#crm:ops",
+        (item: IEvidenceListItem): boolean =>
+          item.target === "links.csv#crm:ops",
       );
       TestValidator.equals(
         "row location is its line",
@@ -88,24 +90,27 @@ export async function test_delimited_commands(): Promise<void> {
         [3],
       );
 
-      const filtered: IEvidenceListReport = typia.json.assertParse<IEvidenceListReport>(
-        (
-          await run(directory, [
-            "list",
-            "--language",
-            "csv",
-            "--kind",
-            "row",
-            "--format",
-            "json",
-          ])
-        ).stdout,
-      );
+      const filtered: IEvidenceListReport =
+        typia.json.assertParse<IEvidenceListReport>(
+          (
+            await run(directory, [
+              "list",
+              "--language",
+              "csv",
+              "--kind",
+              "row",
+              "--format",
+              "json",
+            ])
+          ).stdout,
+        );
       TestValidator.equals(
         "filters keep only rows",
         filtered.items
           .map((item: IEvidenceListItem): string => item.target)
-          .sort((left: string, right: string): number => left.localeCompare(right)),
+          .sort((left: string, right: string): number =>
+            left.localeCompare(right),
+          ),
         ["links.csv#crm:ops", "links.csv#crm:sales"],
       );
 
@@ -124,33 +129,55 @@ export async function test_delimited_commands(): Promise<void> {
         );
       }
 
-      const graph: IEvidenceGraphReport = typia.json.assertParse<IEvidenceGraphReport>(
-        (await run(directory, ["graph", "--format", "json"])).stdout,
-      );
+      const graph: IEvidenceGraphReport =
+        typia.json.assertParse<IEvidenceGraphReport>(
+          (await run(directory, ["graph", "--format", "json"])).stdout,
+        );
       TestValidator.equals(
         "graph exports one row acknowledgement",
         graph.edges.map((edge) => edge.declaration.target),
         ["links.csv#crm:sales"],
       );
 
-      const full: IEvidenceCommandResult = await run(directory, ["--format", "json"]);
+      const full: IEvidenceCommandResult = await run(directory, [
+        "--format",
+        "json",
+      ]);
       TestValidator.equals("full check misses one row", full.exitCode, 1);
-      const covered: IEvidenceCheckReport = typia.json.assertParse<IEvidenceCheckReport>(
-        (await run(directory, ["--only", "links.csv#crm:sales", "--format", "json"]))
-          .stdout,
-      );
+      const covered: IEvidenceCheckReport =
+        typia.json.assertParse<IEvidenceCheckReport>(
+          (
+            await run(directory, [
+              "--only",
+              "links.csv#crm:sales",
+              "--format",
+              "json",
+            ])
+          ).stdout,
+        );
       TestValidator.equals(
         "focused covered row",
         [covered.exitCode, covered.counts.units, covered.counts.coveredUnits],
         [0, 1, 1],
       );
-      const uncovered: IEvidenceCheckReport = typia.json.assertParse<IEvidenceCheckReport>(
-        (await run(directory, ["--only", "links.csv#crm:ops", "--format", "json"]))
-          .stdout,
-      );
+      const uncovered: IEvidenceCheckReport =
+        typia.json.assertParse<IEvidenceCheckReport>(
+          (
+            await run(directory, [
+              "--only",
+              "links.csv#crm:ops",
+              "--format",
+              "json",
+            ])
+          ).stdout,
+        );
       TestValidator.equals(
         "focused uncovered row",
-        [uncovered.exitCode, uncovered.counts.units, uncovered.counts.missingUnits],
+        [
+          uncovered.exitCode,
+          uncovered.counts.units,
+          uncovered.counts.missingUnits,
+        ],
         [1, 1, 1],
       );
     },

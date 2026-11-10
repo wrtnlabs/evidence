@@ -52,31 +52,35 @@ export async function test_delimited_watch(): Promise<void> {
         void watcher.close();
       }, 30_000);
       try {
-        await watcher.watch(async (cycle: EvidenceWatchCycle): Promise<void> => {
-          if (cycle.status === "failed") throw new Error(cycle.message);
-          exits.push(cycle.exitCode);
-          if (cycle.cycle === 1) {
-            TestValidator.predicate(
-              "ledger is a watch dependency",
-              watcher
-                .dependencies()
-                .some((dependency: IEvidenceSourceDependency): boolean =>
-                  dependency.path.replaceAll("\\", "/").endsWith("data/projects.tsv"),
-                ),
-            );
-            await EvidenceTestFileSystem.save(directory, {
-              "data/projects.tsv": "id\ttitle\nP1\tAlpha\nP2\tBeta\n",
-            });
-          } else if (cycle.cycle === 2)
-            await EvidenceTestFileSystem.save(directory, {
-              "data/projects.tsv": "id\ttitle\nP1\tAlpha\nP1\tAgain\n",
-            });
-          else if (cycle.cycle === 3)
-            await EvidenceTestFileSystem.save(directory, {
-              "data/projects.tsv": "id\ttitle\nP1\tAlpha\n",
-            });
-          else await watcher.close();
-        });
+        await watcher.watch(
+          async (cycle: EvidenceWatchCycle): Promise<void> => {
+            if (cycle.status === "failed") throw new Error(cycle.message);
+            exits.push(cycle.exitCode);
+            if (cycle.cycle === 1) {
+              TestValidator.predicate(
+                "ledger is a watch dependency",
+                watcher
+                  .dependencies()
+                  .some((dependency: IEvidenceSourceDependency): boolean =>
+                    dependency.path
+                      .replaceAll("\\", "/")
+                      .endsWith("data/projects.tsv"),
+                  ),
+              );
+              await EvidenceTestFileSystem.save(directory, {
+                "data/projects.tsv": "id\ttitle\nP1\tAlpha\nP2\tBeta\n",
+              });
+            } else if (cycle.cycle === 2)
+              await EvidenceTestFileSystem.save(directory, {
+                "data/projects.tsv": "id\ttitle\nP1\tAlpha\nP1\tAgain\n",
+              });
+            else if (cycle.cycle === 3)
+              await EvidenceTestFileSystem.save(directory, {
+                "data/projects.tsv": "id\ttitle\nP1\tAlpha\n",
+              });
+            else await watcher.close();
+          },
+        );
       } finally {
         clearTimeout(timeout);
         await watcher.close();

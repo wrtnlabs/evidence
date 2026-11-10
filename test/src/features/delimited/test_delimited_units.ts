@@ -7,8 +7,8 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
 /**
  * Reads CSV and TSV records into keyed row units under a file aggregate.
  *
- * Row identity must come from the key alone and follow the published grammar
- * of each dialect: RFC 4180 quoting for CSV and IANA literal fields for TSV.
+ * Row identity must come from the key alone and follow the published grammar of
+ * each dialect: RFC 4180 quoting for CSV and IANA literal fields for TSV.
  *
  * 1. Analyze a CSV ledger with a BOM, CRLF endings, blank lines, quoted commas,
  *    doubled quotes, an embedded line break, and a trailing line break; require
@@ -48,14 +48,18 @@ export async function test_delimited_units(): Promise<void> {
   );
   TestValidator.predicate(
     "rows are children of the file",
-    rows(csv).every((unit: IEvidenceUnit): boolean => unit.parentId === file.id),
+    rows(csv).every(
+      (unit: IEvidenceUnit): boolean => unit.parentId === file.id,
+    ),
   );
   TestValidator.equals(
     "row addresses use the root-relative path and key",
     rows(csv).map((unit: IEvidenceUnit): string[] =>
       csv.addresses
         .filter((address) => address.unitId === unit.id)
-        .map((address): string => `${address.file}#${address.segments.join("")}`),
+        .map(
+          (address): string => `${address.file}#${address.segments.join("")}`,
+        ),
     ),
     [
       ["/project/data/projects.csv#P1"],

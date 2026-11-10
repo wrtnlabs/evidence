@@ -1,4 +1,7 @@
-import { EvidenceConfigLoader, createEvidenceConfigPlan } from "@wrtnlabs/evidence";
+import {
+  EvidenceConfigLoader,
+  createEvidenceConfigPlan,
+} from "@wrtnlabs/evidence";
 import type { IEvidenceConfig, IEvidenceConfigPlan } from "@wrtnlabs/evidence";
 import { TestValidator } from "@nestia/e2e";
 import { join } from "node:path";
@@ -8,8 +11,8 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
 /**
  * Validates CSV and TSV configuration and resolves their row defaults.
  *
- * 1. Plan a CSV claim and a TSV reference without symbols; require `row` for
- *    both sides.
+ * 1. Plan a CSV claim and a TSV reference without symbols; require `row` for both
+ *    sides.
  * 2. Plan configurations with an empty key list, a repeated key column, an empty
  *    key name, an evidence column that is also a key, and an empty evidence
  *    column; require one rejection naming every offending field.

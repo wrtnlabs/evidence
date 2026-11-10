@@ -58,9 +58,8 @@ export namespace EvidenceTargetApplicability {
     // exact selected rooted file outranks the lexical Swagger guess.
     if (
       swaggerLike(statement.target) &&
-      !references.some(
-        (entry: IEvidenceMaterializedReference): boolean =>
-          rootedExact(statement.target, entry, indexes),
+      !references.some((entry: IEvidenceMaterializedReference): boolean =>
+        rootedExact(statement.target, entry, indexes),
       )
     )
       return references.filter(

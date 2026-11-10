@@ -64,7 +64,8 @@ export class EvidenceDelimitedScanner {
   ) {
     this.text = EvidenceSourceText.of(source.content);
     this.targetable = source.addresses.filter(
-      (address: IEvidenceSourceAddress): boolean => !/\s/u.test(address.relative),
+      (address: IEvidenceSourceAddress): boolean =>
+        !/\s/u.test(address.relative),
     );
   }
 
@@ -105,8 +106,9 @@ export class EvidenceDelimitedScanner {
     );
     const header: IEvidenceDelimitedRecord | undefined = reader.next();
     const names: string[] =
-      header?.fields.map((field: IEvidenceDelimitedField): string => field.value) ??
-      [];
+      header?.fields.map(
+        (field: IEvidenceDelimitedField): string => field.value,
+      ) ?? [];
     this.materializeFile(names);
     if (header === undefined) {
       this.problem(
@@ -333,8 +335,8 @@ export class EvidenceDelimitedScanner {
   /**
    * Lists the fingerprinted column indexes sorted by header name.
    *
-   * Sorting makes a pure column reorder leave every digest unchanged, while
-   * the header names inside the digest keep renames significant.
+   * Sorting makes a pure column reorder leave every digest unchanged, while the
+   * header names inside the digest keep renames significant.
    */
   private fingerprintOrder(
     names: string[],

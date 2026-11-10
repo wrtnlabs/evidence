@@ -5,8 +5,9 @@
  *
  * - `csv`: RFC 4180. Comma-separated fields; a field enclosed in double quotes
  *   may contain commas, line breaks, and doubled quotes.
- * - `tsv`: IANA `text/tab-separated-values`. Tab-separated fields with no quoting,
- *   so every character except tab and line breaks is literal field data.
+ * - `tsv`: IANA `text/tab-separated-values`. Tab-separated fields with no
+ *   quoting, so every character except tab and line breaks is literal field
+ *   data.
  *
  * The type, not the file extension, chooses the grammar.
  *

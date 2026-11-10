@@ -992,11 +992,10 @@ export namespace EvidenceQueryProgrammer {
   /**
    * Renders one indexed address with the target grammar of its population.
    *
-   * Prisma and Swagger do not use file-qualified accessors, while Markdown, CSV,
-   * and TSV must preserve selected logical aliases for a physical file and keep
-   * their segment literal. Other artifacts are
-   * made CLI-relative; an unrenderable Swagger address is omitted from query
-   * output.
+   * Prisma and Swagger do not use file-qualified accessors, while Markdown,
+   * CSV, and TSV must preserve selected logical aliases for a physical file and
+   * keep their segment literal. Other artifacts are made CLI-relative; an
+   * unrenderable Swagger address is omitted from query output.
    */
   function formatAddress(
     population: EvidenceQueryPopulationContext,

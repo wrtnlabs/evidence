@@ -19,12 +19,13 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  *    `#`, `"`, or a format character, a composite part holding `:`, a ragged
  *    row, and a missing key column; require each diagnostic code at the
  *    authored line and an incomplete inventory.
+ *
  *    - Duplicate keys yield no unit for any duplicate, while a valid sibling row
- *      still has a unit.
+ *         still has a unit.
  * 2. Analyze CSV syntax errors: an unterminated quote, a quote inside an unquoted
  *    field, and text after a closing quote; require their codes and lines.
- * 3. Analyze a file with no header, empty and repeated header names, and a
- *    missing evidence column; require their codes.
+ * 3. Analyze a file with no header, empty and repeated header names, and a missing
+ *    evidence column; require their codes.
  * 4. Analyze a source whose only path contains whitespace and a source whose
  *    discovery failed; require incomplete inventories.
  * 5. Construct adapters with empty, repeated, or overlapping column options;
@@ -72,11 +73,7 @@ export async function test_delimited_failures(): Promise<void> {
     "delimited-key",
     [2],
   );
-  const single: IEvidenceInventory = await analyze(
-    "tsv",
-    "id\nurn:x\n",
-    "id",
-  );
+  const single: IEvidenceInventory = await analyze("tsv", "id\nurn:x\n", "id");
   TestValidator.equals(
     "a single key may contain the joiner",
     rowNames(single),
@@ -146,10 +143,18 @@ export async function test_delimited_failures(): Promise<void> {
   }).analyze(
     EvidenceTestSourceSnapshot.fail(
       EvidenceTestSourceSnapshot.create("data.tsv", "id\nP1\n"),
-      { code: "path-unreadable", path: "/project/missing.tsv", message: "EACCES" },
+      {
+        code: "path-unreadable",
+        path: "/project/missing.tsv",
+        message: "EACCES",
+      },
     ),
   );
-  TestValidator.equals("failed discovery is incomplete", failed.complete, false);
+  TestValidator.equals(
+    "failed discovery is incomplete",
+    failed.complete,
+    false,
+  );
   TestValidator.predicate(
     "failed discovery keeps its diagnostic",
     failed.diagnostics.some(
@@ -195,7 +200,9 @@ function expectFailure(
   TestValidator.equals(
     `${label} lines`,
     inventory.diagnostics
-      .filter((diagnostic: IEvidenceDiagnostic): boolean => diagnostic.code === code)
+      .filter(
+        (diagnostic: IEvidenceDiagnostic): boolean => diagnostic.code === code,
+      )
       .map(
         (diagnostic: IEvidenceDiagnostic): number =>
           diagnostic.location?.range?.start.line ?? 0,

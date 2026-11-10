@@ -3,9 +3,9 @@ import type { IEvidenceDelimitedField } from "./IEvidenceDelimitedField";
 /**
  * One physical record of a CSV or TSV file.
  *
- * A CSV record can span several lines when a quoted field contains line
- * breaks. Its span excludes the terminating line break, so a row's diagnostic
- * starts at its first field.
+ * A CSV record can span several lines when a quoted field contains line breaks.
+ * Its span excludes the terminating line break, so a row's diagnostic starts at
+ * its first field.
  *
  * @evidence contracts/common.md#principled-implementation A record keeps its ordered fields and its half-open span without the line terminator, which is enough to validate width and locate the row.
  * @evidence contracts/common.md#clear-and-simple-design The record is reader output only; header roles and keys are applied by the scanner.

@@ -9,10 +9,10 @@ import type { EvidenceDelimitedType } from "../typings/EvidenceDelimitedType";
  * Target grammar shared by document artifacts addressed from a reference root.
  *
  * Markdown, CSV, and TSV targets name a path relative to the reference root,
- * optionally followed by `#` and one literal segment: a heading anchor or a
- * row key. Resolution, affinity scoring, query rendering, and detached H1
- * owners use this one boundary so the three artifacts follow the same path
- * rules while keeping their own segment checks.
+ * optionally followed by `#` and one literal segment: a heading anchor or a row
+ * key. Resolution, affinity scoring, query rendering, and detached H1 owners
+ * use this one boundary so the three artifacts follow the same path rules while
+ * keeping their own segment checks.
  *
  * @evidence contracts/common.md#principled-implementation Root-relative path plus one literal segment is the common grammar; each artifact keeps its own parser for the segment rules.
  * @evidence contracts/common.md#clear-and-simple-design Consumers branch once on is() and delegate parsing, labels and extension signals here instead of repeating per-artifact cases.
@@ -72,7 +72,9 @@ export namespace EvidenceRootedTarget {
    * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources The function keeps no state after returning.
    */
   export function label(type: "markdown" | EvidenceDelimitedType): string {
-    return type === "markdown" ? "Markdown" : EvidenceDelimitedSyntax.label(type);
+    return type === "markdown"
+      ? "Markdown"
+      : EvidenceDelimitedSyntax.label(type);
   }
 
   /**

@@ -21,7 +21,10 @@ import type { IEvidenceDelimitedRecord } from "./IEvidenceDelimitedRecord";
  * error in a file.
  *
  * @example
- *   const reader = new EvidenceDelimitedReader('id,note\nP1,"a, ""b"""\n', "csv");
+ *   const reader = new EvidenceDelimitedReader(
+ *     'id,note\nP1,"a, ""b"""\n',
+ *     "csv",
+ *   );
  *   reader.next(); // header: id, note
  *   reader.next(); // P1 and a, "b"
  *

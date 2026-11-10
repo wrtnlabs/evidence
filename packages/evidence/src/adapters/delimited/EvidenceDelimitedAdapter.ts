@@ -15,8 +15,8 @@ import { EvidenceDelimitedSyntax } from "./EvidenceDelimitedSyntax";
  * Every supplied source is read with the grammar of the configured dialect,
  * regardless of its extension. Each valid row becomes a `row` unit addressed by
  * its key beneath an addressable `file` aggregate. Rows host annotations in the
- * configured evidence column; structural failures leave an incomplete
- * inventory instead of a smaller population.
+ * configured evidence column; structural failures leave an incomplete inventory
+ * instead of a smaller population.
  *
  * @example
  *   const adapter = new EvidenceDelimitedAdapter("tsv", { key: "id" });
@@ -31,9 +31,7 @@ import { EvidenceDelimitedSyntax } from "./EvidenceDelimitedSyntax";
  * @evidenceExclude contracts/performance.md#reuse-equivalent-work Each analysis scans its snapshot once; sharing identical loads belongs to the checker.
  * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources The adapter keeps only its immutable options between analyses; scanners are discarded after each file.
  */
-export class EvidenceDelimitedAdapter
-  implements IEvidenceAdapter<EvidenceDelimitedType>
-{
+export class EvidenceDelimitedAdapter implements IEvidenceAdapter<EvidenceDelimitedType> {
   /** Validated copy of the column roles used for every analysis. */
   private readonly options: IEvidenceDelimitedOptions;
 

@@ -7,9 +7,9 @@
  * Configuration validation rejects empty names, a repeated key column, and an
  * evidence column that is also a key column.
  *
- * Claims and references share these settings because the evidence column
- * shapes row fingerprints on both sides: its cells are never fingerprinted, so
- * a row's own annotations cannot expire a review of that row.
+ * Claims and references share these settings because the evidence column shapes
+ * row fingerprints on both sides: its cells are never fingerprinted, so a row's
+ * own annotations cannot expire a review of that row.
  *
  * @example
  *   const options: IEvidenceDelimitedOptions = {

@@ -53,17 +53,21 @@ export async function test_delimited_hosts(): Promise<void> {
   TestValidator.equals("TSV ledger stays complete", tsv.complete, true);
   TestValidator.equals(
     "one attached host per row",
-    tsv.hosts.map((host: IEvidenceHost): string[] => host.unitIds.map(name(tsv))),
+    tsv.hosts.map((host: IEvidenceHost): string[] =>
+      host.unitIds.map(name(tsv)),
+    ),
     [["P1"], ["P2"], ["P3"], ["P4"], ["P5"]],
   );
   TestValidator.equals(
     "declarations split at tag tokens",
-    bySource(tsv.declarations).map((declaration: IEvidenceDeclaration): string[] => [
-      hostRow(tsv, declaration.hostId),
-      declaration.kind,
-      declaration.target,
-      declaration.reason,
-    ]),
+    bySource(tsv.declarations).map(
+      (declaration: IEvidenceDeclaration): string[] => [
+        hostRow(tsv, declaration.hostId),
+        declaration.kind,
+        declaration.target,
+        declaration.reason,
+      ],
+    ),
     [
       ["P1", "evidence", "goals.md#growth", "Drives paid growth."],
       ["P2", "evidence", "goals.md#growth", "Adds reach."],
@@ -82,8 +86,9 @@ export async function test_delimited_hosts(): Promise<void> {
   );
   TestValidator.equals(
     "every annotation location slices to its authored text",
-    bySource(tsv.declarations).map((declaration: IEvidenceDeclaration): string =>
-      slice(tsvSource, declaration.location),
+    bySource(tsv.declarations).map(
+      (declaration: IEvidenceDeclaration): string =>
+        slice(tsvSource, declaration.location),
     ),
     [
       "@evidence goals.md#growth Drives paid growth.",
@@ -99,7 +104,9 @@ export async function test_delimited_hosts(): Promise<void> {
   TestValidator.equals(
     "only leading prose is reported",
     prose.map((diagnostic: IEvidenceDiagnostic): string =>
-      diagnostic.location === undefined ? "" : slice(tsvSource, diagnostic.location),
+      diagnostic.location === undefined
+        ? ""
+        : slice(tsvSource, diagnostic.location),
     ),
     ["see notes"],
   );
@@ -142,7 +149,11 @@ export async function test_delimited_hosts(): Promise<void> {
     ),
     ["missing-evidence-reason"],
   );
-  TestValidator.equals("malformed annotation adds no declaration", malformed.declarations, []);
+  TestValidator.equals(
+    "malformed annotation adds no declaration",
+    malformed.declarations,
+    [],
+  );
 
   const plain: IEvidenceInventory = await new EvidenceDelimitedAdapter("tsv", {
     key: "id",
@@ -156,7 +167,9 @@ export async function test_delimited_hosts(): Promise<void> {
 }
 
 /** Orders statements by their source offset, the authored order. */
-function bySource(declarations: IEvidenceDeclaration[]): IEvidenceDeclaration[] {
+function bySource(
+  declarations: IEvidenceDeclaration[],
+): IEvidenceDeclaration[] {
   return [...declarations].sort(
     (left: IEvidenceDeclaration, right: IEvidenceDeclaration): number =>
       (left.location.range?.start.offset ?? 0) -

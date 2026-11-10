@@ -187,9 +187,8 @@ export class EvidenceTargetResolverIndex {
    * The host must match the statement because diagnostics and relative origins
    * belong to that attachment. Specialized Markdown, CSV, TSV, Prisma, and
    * Swagger target forms are parsed only for a uniquely identified artifact
-   * type. Ordinary
-   * file targets are attempted for each declared host origin, then deduplicated
-   * before index lookup and filesystem classification.
+   * type. Ordinary file targets are attempted for each declared host origin,
+   * then deduplicated before index lookup and filesystem classification.
    *
    * Incomplete inventories win before an empty or missing-member result. A scan
    * that omitted declarations cannot prove coverage merely because the
@@ -295,7 +294,12 @@ export class EvidenceTargetResolverIndex {
           resolution: this.index.resolve(address, ids),
         }),
       );
-      return this.resolveCandidates(statement, uniqueAddresses, candidates, type);
+      return this.resolveCandidates(
+        statement,
+        uniqueAddresses,
+        candidates,
+        type,
+      );
     }
     const candidates: IEvidenceTargetCandidate[] = [];
     for (const address of uniqueAddresses) {
@@ -312,7 +316,12 @@ export class EvidenceTargetResolverIndex {
         });
     }
     if (candidates.length !== 0)
-      return this.resolveCandidates(statement, uniqueAddresses, candidates, type);
+      return this.resolveCandidates(
+        statement,
+        uniqueAddresses,
+        candidates,
+        type,
+      );
 
     // No selected address matched. Inspect the explicit candidate paths only to
     // distinguish a missing file from a known but out-of-population source.

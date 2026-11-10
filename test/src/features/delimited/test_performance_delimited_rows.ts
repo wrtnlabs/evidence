@@ -17,9 +17,9 @@ import { EvidenceTestSourceSnapshot } from "../../internal/EvidenceTestSourceSna
  * Generous wall-clock ceilings catch quadratic reading or resolution, while
  * exact counts prove that no row was skipped to save time.
  *
- * 1. Analyze a 100,000-row single-column TSV, whose fields contain no
- *    delimiter, and a 100,000-row CSV with quoted fields; require every row as
- *    a unit and each analysis within 20 seconds.
+ * 1. Analyze a 100,000-row single-column TSV, whose fields contain no delimiter,
+ *    and a 100,000-row CSV with quoted fields; require every row as a unit and
+ *    each analysis within 20 seconds.
  * 2. Check a Markdown decision that cites the CSV file aggregate and two rows;
  *    require all 100,000 rows covered and the whole check within 60 seconds.
  *
@@ -32,7 +32,10 @@ export async function test_performance_delimited_rows(): Promise<void> {
   const count: number = 100_000;
   const single: string = [
     "id",
-    ...Array.from({ length: count }, (_: unknown, index: number): string => `R${index}`),
+    ...Array.from(
+      { length: count },
+      (_: unknown, index: number): string => `R${index}`,
+    ),
     "",
   ].join("\n");
   let begin: number = performance.now();
@@ -116,7 +119,11 @@ function plan(directory: string): IEvidenceConfigPlan {
             index: 0,
             severity: "error",
             symbols: ["row"],
-            population: { type: "csv", files: ["data/projects.csv"], key: "id" },
+            population: {
+              type: "csv",
+              files: ["data/projects.csv"],
+              key: "id",
+            },
           },
         ],
       },

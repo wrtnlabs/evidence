@@ -32,7 +32,8 @@ import type { IEvidenceReferenceBase } from "./IEvidenceReferenceBase";
  * @evidenceExclude contracts/performance.md#bound-retention-and-release-resources A type declaration acquires and holds no runtime resource.
  */
 export interface IEvidenceDelimitedReference
-  extends IEvidenceReferenceBase<EvidenceDelimitedType, "row">,
+  extends
+    IEvidenceReferenceBase<EvidenceDelimitedType, "row">,
     IEvidenceDelimitedOptions {
   /**
    * Ledger globs relative to the reference root.
