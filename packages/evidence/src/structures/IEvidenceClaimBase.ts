@@ -100,14 +100,14 @@ export interface IEvidenceClaimBase<
   files: string[];
 
   /**
-   * Markdown files that may carry this claim's positive evidence separately
+   * Markdown files that may carry this claim's evidence statements separately
    * from its selected declarations.
    *
    * Paths use ordered globs rooted at the configuration file directory, even
    * when `root` selects claim sources elsewhere. Each H1 in a matched document
-   * names a selected unit of a claim using that document. Its Evidence headings
-   * belong to that unit, and native documentation remains eligible alongside
-   * these files.
+   * names a selected unit of a claim using that document. Its `@evidence` and
+   * `@evidenceExclude` headings, and the reviews beneath them, belong to that
+   * unit, and native documentation remains eligible alongside these files.
    */
   evidenceFiles?: string[];
 
@@ -133,6 +133,8 @@ export interface IEvidenceClaimBase<
    * - Use the same root and glob rules as files; never widen that population.
    * - Omit to allow every eligible carrier. An exclusion outside these globs is
    *   reported and provides no coverage.
+   * - An exclusion in `evidenceFiles` is matched by the file of its H1 owner, not
+   *   by the Markdown document that holds it.
    * - Each reference may independently refuse all exclusions with
    *   noEvidenceExclude.
    * - A Markdown checklist permits these globs only with noEvidenceExclude.

@@ -13,14 +13,15 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  * 1. Confirm a valid H1 and H2 evidence heading covers one requirement.
  * 2. Change the H1 to an absent source and then remove it; require incomplete
  *    results with owner and unowned-statement diagnostics respectively.
- * 3. Put exclusion and exclusion-review tags in the detached file and require
- *    source-located errors rather than coverage.
+ * 3. Put an exclusion heading and its exclusion-review comment before the first H1
+ *    and require one unowned-statement error for each, even though a valid
+ *    owner section follows.
  * 4. Empty a selected document and require its missing-H1 diagnostic, then remove
  *    every matching evidence file and require an incomplete result.
  *
- * @evidence contracts/testing.md#behavioral-verification Runs the checker after each detached-source mutation and asserts coverage, incomplete status, diagnostic category and source location, including a selected empty document.
- * @evidence contracts/testing.md#independent-expectations The fixture declares exactly one selected function, so the absent H1 address, ownerless H2 and exclusion cannot be its positive evidence.
- * @evidence contracts/testing.md#distinguishing-cases Valid, unresolved-owner, absent-owner, empty-document, forbidden exclusion and review kinds, and empty-glob states distinguish structural binding failures from normal missing coverage.
+ * @evidence contracts/testing.md#behavioral-verification Runs the checker after each detached-source mutation and asserts coverage, incomplete status, diagnostic category, count and source location, including a selected empty document.
+ * @evidence contracts/testing.md#independent-expectations The fixture declares exactly one selected function, so the absent H1 address and ownerless statements cannot be its evidence, and the README requires every detached statement to sit beneath an H1.
+ * @evidence contracts/testing.md#distinguishing-cases Valid, unresolved-owner, absent-owner, leading exclusion and exclusion review beside a later valid owner, empty-document, and empty-glob states distinguish structural binding failures from normal missing coverage; accepted detached exclusions belong to test_checker_evidence_files_exclusions.
  * @evidence contracts/testing.md#execution-ownership DynamicExecutor discovers this exported test; it invokes maintained checker logic directly and cleans its fixture tree.
  */
 export async function test_checker_evidence_files_boundaries(): Promise<void> {
@@ -122,48 +123,33 @@ export async function test_checker_evidence_files_boundaries(): Promise<void> {
 
       await EvidenceTestFileSystem.save(directory, {
         "evidence/execute.md": dedent`
-          # src/execute.ts#execute
-
           ## @evidenceExclude rules.md#rule
 
           Does not apply.
-        `,
-      });
-      const exclusion = await EvidenceChecker.evaluate(plan);
-      TestValidator.equals(
-        "detached exclusion exit",
-        exclusion.report.exitCode,
-        2,
-      );
-      TestValidator.predicate(
-        "detached exclusion diagnostic",
-        exclusion.report.diagnostics.some(
-          (diagnostic) => diagnostic.code === "evidence-files-exclusion",
-        ),
-      );
 
-      await EvidenceTestFileSystem.save(directory, {
-        "evidence/execute.md": dedent`
+          <!-- @evidenceExcludeReview rules.md#rule Reviewed the exclusion. -->
+
           # src/execute.ts#execute
 
           ## @evidence rules.md#rule
 
           Implements the rule.
-
-          <!-- @evidenceExcludeReview rules.md#rule Reviewed an exclusion. -->
         `,
       });
-      const exclusionReview = await EvidenceChecker.evaluate(plan);
+      const leading = await EvidenceChecker.evaluate(plan);
       TestValidator.equals(
-        "detached exclusion review exit",
-        exclusionReview.report.exitCode,
+        "leading exclusion exit",
+        leading.report.exitCode,
         2,
       );
-      TestValidator.predicate(
-        "detached exclusion review diagnostic",
-        exclusionReview.report.diagnostics.some(
-          (diagnostic) => diagnostic.code === "evidence-files-exclusion-review",
-        ),
+      TestValidator.equals(
+        "leading exclusion and review are unowned",
+        leading.report.diagnostics.filter(
+          (diagnostic) =>
+            diagnostic.code === "evidence-files-unowned-statement" &&
+            diagnostic.location?.file.endsWith("execute.md") === true,
+        ).length,
+        2,
       );
 
       await EvidenceTestFileSystem.save(directory, {

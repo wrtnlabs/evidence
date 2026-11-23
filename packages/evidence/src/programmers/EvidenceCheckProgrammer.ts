@@ -21,6 +21,7 @@ import type { IEvidenceCheckReport } from "../structures/IEvidenceCheckReport";
 import type { IEvidenceClaim } from "../structures/IEvidenceClaim";
 import type { IEvidenceConfigPlan } from "../structures/IEvidenceConfigPlan";
 import type { IEvidenceConfigPlanClaim } from "../structures/IEvidenceConfigPlanClaim";
+import type { IEvidenceDetachedHostBinding } from "../structures/IEvidenceDetachedHostBinding";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
 import type { IEvidenceGraphClaim } from "../structures/IEvidenceGraphClaim";
 import type { IEvidenceGraphInput } from "../structures/IEvidenceGraphInput";
@@ -31,6 +32,8 @@ import type { IEvidenceGraphReviewResolution } from "../structures/IEvidenceGrap
 import type { IEvidenceHost } from "../structures/IEvidenceHost";
 import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
 import type { IEvidenceReference } from "../structures/IEvidenceReference";
+import type { IEvidenceUnit } from "../structures/IEvidenceUnit";
+import type { IEvidenceUnitSite } from "../structures/IEvidenceUnitSite";
 import type { EvidenceSymbol } from "../typings/EvidenceSymbol";
 
 import type { IEvidenceCheckContext } from "../contexts/IEvidenceCheckContext";
@@ -132,7 +135,9 @@ export namespace EvidenceCheckProgrammer {
           severity: "error",
           message: `H1 owner '${owner.target}' does not name one selected claim unit (${owner.status}).`,
           repair:
-            "Use a file-qualified address of a unit selected by a claim using this evidence file.",
+            owner.status === "unsupported-host"
+              ? "Name a declaration inside this address-only scope; a namespace, module, extension or category hosts no evidence."
+              : "Use a file-qualified address of a unit selected by a claim using this evidence file.",
           location: owner.location,
         });
         claim.inventory.complete = false;
@@ -295,6 +300,7 @@ export namespace EvidenceCheckProgrammer {
             exclusionHostIds: selectExclusionHosts(
               inventory,
               plan.population.evidenceExcludeCarriers,
+              separate?.bindings ?? [],
             ),
           }),
       references,
@@ -386,11 +392,15 @@ export namespace EvidenceCheckProgrammer {
    *
    * Matching starts from selected logical addresses, then maps their physical
    * files back to hosts. This lets aliases share one exclusion decision while
-   * avoiding exclusions from an unselected logical source address.
+   * avoiding exclusions from an unselected logical source address. A detached
+   * Markdown carrier speaks for its H1 owner, so it is eligible exactly when
+   * one of that unit's declaration sites lies in a matching claim file, as a
+   * native carrier on that declaration would be.
    */
   function selectExclusionHosts(
     inventory: IEvidenceInventory,
     patterns: string[],
+    bindings: IEvidenceDetachedHostBinding[],
   ): string[] {
     const globs = new EvidenceFileGlob(patterns);
     const files = new Set(
@@ -403,9 +413,24 @@ export namespace EvidenceCheckProgrammer {
           : [],
       ),
     );
-    return inventory.hosts
-      .filter((host) => files.has(host.file))
-      .map((host) => host.id);
+    const units: Map<string, IEvidenceUnit> = new Map<string, IEvidenceUnit>(
+      inventory.units.map((unit: IEvidenceUnit): [string, IEvidenceUnit] => [
+        unit.id,
+        unit,
+      ]),
+    );
+    return [
+      ...inventory.hosts
+        .filter((host) => files.has(host.file))
+        .map((host) => host.id),
+      ...bindings
+        .filter((binding: IEvidenceDetachedHostBinding): boolean =>
+          (units.get(binding.unitId)?.sites ?? []).some(
+            (site: IEvidenceUnitSite): boolean => files.has(site.file),
+          ),
+        )
+        .map((binding: IEvidenceDetachedHostBinding): string => binding.hostId),
+    ];
   }
 
   /**
