@@ -41,6 +41,8 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  *    - An `@evidenceReview` comment under the exclusion is the wrong kind.
  *    - An `@evidenceExcludeReview` comment with the current fingerprint passes.
  *    - Editing the excluded requirement expires only that review.
+ *    - An `@evidenceExcludeReview` without its exclusion is an orphan and leaves the
+ *         requirement missing.
  * 6. Excuse one function from a whole checklist file with a detached exclusion
  *    while a second, unanswered function still has every item missing.
  * 7. For a Markdown claim rooted at `docs`, match exclusion carriers against the
@@ -48,7 +50,7 @@ import { EvidenceTestFileSystem } from "../../internal/EvidenceTestFileSystem";
  *
  * @evidence contracts/testing.md#behavioral-verification Runs EvidenceChecker over detached exclusion headings and review comments and asserts exit codes, edge kinds, semantic and physical hosts, and diagnostic codes and locations for coverage, noEvidenceExclude, evidenceExcludeCarriers, conflicts, review kind, current and stale reviews, checklist excuses, and rooted Markdown claims; it catches exclusions that are rejected, ignored, attributed to the Markdown heading, or exempt from native policy, and allows a detached exclusion to cover exactly what a native one covers.
  * @evidence contracts/testing.md#independent-expectations Expectations follow the README rules for native exclusions: an exclusion covers its target, noEvidenceExclude refuses it, carriers are judged by the claim file that holds the excluded unit, overlapping evidence conflicts, and requireReview needs a same-kind review with the current reference fingerprint computed by EvidenceFingerprint from the reference text. The fixture has one selected function per role, so a misattributed host cannot satisfy these assertions.
- * @evidence contracts/testing.md#distinguishing-cases Present and removed exclusions, permitted and refused exclusions, matching and non-matching carriers in code and rooted Markdown claims, single- and two-location statements, absent, wrong-kind, current and stale reviews, and an excused next to an unanswered checklist host separate each policy decision; binding failures belong to test_checker_evidence_files_boundaries and positive-evidence policies to test_checker_evidence_files_policies.
+ * @evidence contracts/testing.md#distinguishing-cases Present and removed exclusions, permitted and refused exclusions, matching and non-matching carriers in code and rooted Markdown claims, single- and two-location statements, absent, wrong-kind, current, stale and exclusion-review-only reviews, and an excused next to an unanswered checklist host separate each policy decision; binding failures belong to test_checker_evidence_files_boundaries and positive-evidence policies to test_checker_evidence_files_policies.
  * @evidence contracts/testing.md#execution-ownership DynamicExecutor discovers this exported test, which calls EvidenceChecker in-process and writes only its disposable fixture through EvidenceTestFileSystem.
  */
 export async function test_checker_evidence_files_exclusions(): Promise<void> {
@@ -285,6 +287,26 @@ export async function test_checker_evidence_files_exclusions(): Promise<void> {
       ]);
       await EvidenceTestFileSystem.save(directory, {
         "docs/rules.md": requirement,
+        "evidence/execute.md": dedent`
+          # src/execute.ts#execute
+
+          ## @evidence docs/rules.md#first
+          <!-- @evidenceReview docs/rules.md#first #${first} Confirmed that execute implements the first rule. -->
+          <!-- @evidenceExcludeReview docs/rules.md#second #${second} Reviewed an exclusion that is absent. -->
+
+          Implements the first rule.
+        `,
+      });
+      const reviewOnly: IEvidenceCheckAnalysis =
+        await EvidenceChecker.evaluate(reviewed);
+      TestValidator.equals(
+        "an exclusion review alone covers nothing",
+        codes(reviewOnly).sort((left: string, right: string): number =>
+          left.localeCompare(right),
+        ),
+        ["graph-missing-acknowledgement", "graph-orphan-review"],
+      );
+      await EvidenceTestFileSystem.save(directory, {
         "evidence/execute.md": statements,
       });
 

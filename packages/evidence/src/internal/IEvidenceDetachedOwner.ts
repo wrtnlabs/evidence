@@ -26,7 +26,14 @@ export interface IEvidenceDetachedOwner {
   /** H1 source position. */
   location: IEvidenceSourceLocation;
 
-  /** Resolution status when this claim could not select the H1. */
+  /**
+   * Resolution status when this claim could not select the H1.
+   *
+   * An address that resolves to an address-only scope is recorded as
+   * `unsupported-host`, and one that resolves to another unselected unit as
+   * `out-of-population`, so the diagnostic never reports a refused owner as
+   * `resolved`.
+   */
   status: EvidenceTargetResolutionStatus;
 
   /** Original semantic claim unit when this claim selected the H1. */
