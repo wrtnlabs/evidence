@@ -432,7 +432,7 @@ In Markdown, write the same headings and body without the comment wrapper. Every
 
 ### 5.2. Evidence in separate files
 
-Set `evidenceFiles` on a claim to keep evidence statements in separate Markdown documents. Its globs resolve from the physical `evidence.config.ts` directory, independently of the claim's `root`. Each document needs an H1 with the file-qualified address of a selected claim unit, also relative to the config directory. Put H2, H3, or H4 `@evidence` headings beneath that H1; the following text is the reason.
+Set `evidenceFiles` on a claim to keep evidence statements in separate Markdown documents. Its globs resolve from the physical `evidence.config.ts` directory, independently of the claim's `root`. Each document needs an H1 with the file-qualified address of a selected claim unit, also relative to the config directory. Put H2, H3, or H4 `@evidence` or `@evidenceExclude` headings beneath that H1; the following text is the reason.
 
 ```ts
 // evidence.config.ts
@@ -453,6 +453,10 @@ export default {
 ## @evidence docs/requirements.md#checkout
 
 The order is checked before payment is requested.
+
+## @evidenceExclude docs/requirements.md#refund
+
+Refunds are issued by the billing service, not when an order is placed.
 ```
 
 For a Markdown claim, the same structure names the selected heading instead of a code declaration:
@@ -481,7 +485,7 @@ The guide explains how the price is calculated.
 
 For a CSV or TSV claim, the H1 names the row, such as `# data/projects.tsv#P3`; this suits ledgers written by batch jobs, where adding a prose column is impractical.
 
-The H1 identifies the original code, Markdown, or row unit, so its statements count for that unit. One document can contain H1 sections for several units or claims. Annotation targets keep their usual path bases: programming targets resolve from the evidence document, while Markdown targets resolve from the reference root. Native documentation and separate evidence can cover the same claim together; duplicate and review policies apply to their combined statements. When `requireReview` is enabled, place `@evidenceReview` in an HTML comment directly below the detached evidence heading. Keep `@evidenceExclude` and `@evidenceExcludeReview` on eligible original claim carriers. No matching document, an unresolved H1, a statement outside an H1, a detached exclusion, or selecting one file as both a claim source and separate evidence makes the check incomplete.
+The H1 identifies the original code, Markdown, or row unit, so its statements count for that unit. One document can contain H1 sections for several units or claims. Annotation targets keep their usual path bases: programming targets resolve from the evidence document, while Markdown targets resolve from the reference root. Native documentation and separate evidence can cover the same claim together; duplicate, conflict, and review policies apply to their combined statements. A separate exclusion follows the native rules: `noEvidenceExclude` refuses it, and `evidenceExcludeCarriers` matches the file of its H1 unit rather than the evidence document. When `requireReview` is enabled, place `@evidenceReview` or `@evidenceExcludeReview` in an HTML comment directly below its heading. No matching document, an unresolved H1, a statement outside an H1, or selecting one file as both a claim source and separate evidence makes the check incomplete.
 
 ### 5.3. Target addresses
 

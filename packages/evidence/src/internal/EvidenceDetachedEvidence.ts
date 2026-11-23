@@ -5,10 +5,12 @@ import { EvidenceAnalysisIndexes } from "./EvidenceAnalysisIndexes";
 import type { EvidenceTargetResolverIndex } from "./EvidenceTargetResolverIndex";
 import { EvidenceFileTarget } from "../targets/EvidenceFileTarget";
 import type { IEvidenceClaim } from "../structures/IEvidenceClaim";
+import type { IEvidenceDeclaration } from "../structures/IEvidenceDeclaration";
 import type { IEvidenceDetachedHostBinding } from "../structures/IEvidenceDetachedHostBinding";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
 import type { IEvidenceHost } from "../structures/IEvidenceHost";
 import type { IEvidenceInventory } from "../structures/IEvidenceInventory";
+import type { IEvidenceReview } from "../structures/IEvidenceReview";
 import type { IEvidenceSourceLocation } from "../structures/IEvidenceSourceLocation";
 import type { IEvidenceTargetResolution } from "../structures/IEvidenceTargetResolution";
 import type { IEvidenceTargetStatement } from "../structures/IEvidenceTargetStatement";
@@ -34,14 +36,16 @@ import type { IEvidenceDetachedOwner } from "./IEvidenceDetachedOwner";
  */
 export namespace EvidenceDetachedEvidence {
   /**
-   * Resolves H1 addresses and selects positive statements from one Markdown
-   * inventory for one original claim.
+   * Resolves H1 addresses and selects the statements of one Markdown inventory
+   * that belong to one original claim.
    *
-   * The source inventory is not edited. Errors stay with the detached source
-   * location and make its result incomplete, so graph evaluation cannot pass
-   * over a partial or misbound set of statements.
+   * Acknowledgements, exclusions and both review kinds bind alike; the graph
+   * then applies the same policies it applies to native statements. The source
+   * inventory is not edited. Errors stay with the detached source location and
+   * make its result incomplete, so graph evaluation cannot pass over a partial
+   * or misbound set of statements.
    *
-   * @evidence contracts/common.md#principled-implementation Every H1 is resolved against selected original units, and every detached statement follows its actual Markdown ancestor to that resolved owner.
+   * @evidence contracts/common.md#principled-implementation Every H1 is resolved against selected original units, and every detached acknowledgement, exclusion or review follows its actual Markdown ancestor to that resolved owner.
    * @evidence contracts/common.md#clear-and-simple-design One pass builds owner and host maps; target lookup stays in EvidenceTargetResolver.
    * @evidence contracts/common.md#prohibited-implementation-shortcuts Missing, ambiguous, unselected and unsupported owners are diagnosed instead of mapped by short name or file basename.
    * @evidence contracts/common.md#meaningful-documentation The comment explains input ownership, output, and incomplete failures.
@@ -198,32 +202,15 @@ export namespace EvidenceDetachedEvidence {
       }
       return true;
     }
-    inventory.declarations = inventory.declarations.filter((declaration) => {
-      if (declaration.kind !== "evidence") {
-        problem(
-          inventory,
-          "evidence-files-exclusion",
-          "Detached evidence files cannot carry @evidenceExclude.",
-          "Keep an exclusion on an eligible original claim carrier.",
-          declaration.location,
-        );
-        return false;
-      }
-      return bindHost(declaration.hostId);
-    });
-    inventory.reviews = inventory.reviews.filter((review) => {
-      if (review.reviews !== "evidence") {
-        problem(
-          inventory,
-          "evidence-files-exclusion-review",
-          "Detached evidence files cannot carry @evidenceExcludeReview.",
-          "Review the exclusion on its original claim carrier.",
-          review.location,
-        );
-        return false;
-      }
-      return bindHost(review.hostId);
-    });
+    // Every statement kind binds through the same ancestor rule, so exclusions
+    // and their reviews meet the same graph policies as native ones.
+    inventory.declarations = inventory.declarations.filter(
+      (declaration: IEvidenceDeclaration): boolean =>
+        bindHost(declaration.hostId),
+    );
+    inventory.reviews = inventory.reviews.filter(
+      (review: IEvidenceReview): boolean => bindHost(review.hostId),
+    );
     return { inventory, bindings, owners };
   }
 }
