@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { createHash } from "node:crypto";
 import typia from "typia";
 
@@ -103,7 +104,7 @@ export class EvidenceDbmlAdapter implements IEvidenceAdapter<"dbml"> {
       );
       for (const analysis of analyses) {
         inventory.complete &&= analysis.complete;
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.dependencies.push({
           path: analysis.source.physicalPath,
           recursive: false,
@@ -425,7 +426,8 @@ export class EvidenceDbmlAdapter implements IEvidenceAdapter<"dbml"> {
         });
         for (const id of host.unitIds) {
           const unit = units.get(id);
-          if (unit !== undefined) unit.withdrawals.push(...parsed.withdrawals);
+          if (unit !== undefined)
+            EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
         }
       }
     const hidden = new Set(
@@ -460,9 +462,9 @@ export class EvidenceDbmlAdapter implements IEvidenceAdapter<"dbml"> {
         inventory.hosts.push(host);
         for (const id of host.unitIds)
           documented.add(`${id}:${host.siteId ?? ""}`);
-        inventory.declarations.push(...parsed.declarations);
-        inventory.reviews.push(...parsed.reviews);
-        inventory.diagnostics.push(...parsed.diagnostics);
+        EvidenceArrays.append(inventory.declarations, parsed.declarations);
+        EvidenceArrays.append(inventory.reviews, parsed.reviews);
+        EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
       }
     for (const unit of inventory.units)
       for (const site of unit.sites)

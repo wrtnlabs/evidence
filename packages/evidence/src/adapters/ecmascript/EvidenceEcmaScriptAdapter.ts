@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import typia from "typia";
 
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
@@ -158,8 +159,14 @@ export abstract class EvidenceEcmaScriptAdapter<
               ? await new EvidenceEcmaScriptModuleResolver().resolve([source])
               : undefined;
           if (resolution !== undefined) {
-            inventory.dependencies.push(...resolution.dependencies);
-            inventory.diagnostics.push(...resolution.diagnostics);
+            EvidenceArrays.append(
+              inventory.dependencies,
+              resolution.dependencies,
+            );
+            EvidenceArrays.append(
+              inventory.diagnostics,
+              resolution.diagnostics,
+            );
             inventory.complete &&= resolution.complete;
           }
           return this.scan(
@@ -171,10 +178,14 @@ export abstract class EvidenceEcmaScriptAdapter<
           );
         },
       );
-      inventory.dependencies.push(...input.dependencies.slice(dependencyCount));
+      EvidenceArrays.append(
+        inventory.dependencies,
+        input.dependencies.slice(dependencyCount),
+      );
       inventory.complete &&= input.complete;
-      inventory.diagnostics.push(
-        ...input.diagnostics
+      EvidenceArrays.append(
+        inventory.diagnostics,
+        input.diagnostics
           .slice(sourceDiagnostics.length)
           .map(
             (
@@ -189,16 +200,20 @@ export abstract class EvidenceEcmaScriptAdapter<
           ),
       );
       for (const analysis of analyses) {
-        inventory.annotationRanges.push(
-          ...analysis.comments
+        EvidenceArrays.append(
+          inventory.annotationRanges,
+          analysis.comments
             .filter((comment) => comment.syntax.opening === "/**")
             .map((comment) => ({
               file: analysis.source.physicalPath,
               range: comment.range,
             })),
         );
-        inventory.units.push(...analysis.units.map((entry) => entry.unit));
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(
+          inventory.units,
+          analysis.units.map((entry) => entry.unit),
+        );
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.complete &&= analysis.complete;
       }
       // Resolve public reachability against the full local inventory first.
@@ -386,7 +401,7 @@ export abstract class EvidenceEcmaScriptAdapter<
           for (const unitId of unitIds) {
             const unit = units.get(unitId);
             if (unit !== undefined)
-              unit.withdrawals.push(...parsed.withdrawals);
+              EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
           }
         }
       }
@@ -436,9 +451,9 @@ export abstract class EvidenceEcmaScriptAdapter<
         const host = this.host(analysis.source, comment, siteId, unitIds);
         inventory.hosts.push(host);
         const parsed = this.parse(analysis.source, comment, host);
-        inventory.declarations.push(...parsed.declarations);
-        inventory.reviews.push(...parsed.reviews);
-        inventory.diagnostics.push(...parsed.diagnostics);
+        EvidenceArrays.append(inventory.declarations, parsed.declarations);
+        EvidenceArrays.append(inventory.reviews, parsed.reviews);
+        EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
       }
     this.materializeUndocumentedHosts(inventory, analyses, published, hidden);
   }

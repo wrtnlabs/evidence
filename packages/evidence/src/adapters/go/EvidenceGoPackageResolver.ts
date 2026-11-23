@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import type { IEvidenceInventory } from "../../structures/IEvidenceInventory";
 import type { IEvidencePublicAddress } from "../../structures/IEvidencePublicAddress";
@@ -145,7 +146,7 @@ export class EvidenceGoPackageResolver {
       this.materialize(entry, owners);
       published.set(entry.declaration.id, entry.unitId);
     }
-    this.inventory.units.push(...this.units.values());
+    EvidenceArrays.append(this.inventory.units, this.units.values());
     return published;
   }
 

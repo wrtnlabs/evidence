@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../internal/EvidenceArrays";
 import { EvidenceQueryInventoryIndex } from "../internal/EvidenceQueryInventoryIndex";
 import type { IEvidenceQueryResolution } from "../internal/IEvidenceQueryResolution";
 import type { EvidenceQueryPopulationContext } from "../contexts/EvidenceQueryPopulationContext";
@@ -141,8 +142,9 @@ export namespace EvidenceUnitCheckProgrammer {
             "Use evidence list or evidence inspect to find a visible configured unit. Shallow targets must themselves be selected by configuration.",
           target,
         });
-        failures.push(
-          ...inspected.flatMap(
+        EvidenceArrays.append(
+          failures,
+          inspected.flatMap(
             (inspection: IEvidenceQueryResolution): IEvidenceDiagnostic[] =>
               inspection.resolution.diagnostics.map(
                 (diagnostic: IEvidenceDiagnostic): IEvidenceDiagnostic => ({

@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { createHash } from "node:crypto";
 import path from "node:path";
 
@@ -292,13 +293,20 @@ export class EvidenceSwaggerAdapter implements IEvidenceAdapter<"swagger"> {
       allowWithdrawal: false,
     };
     const parsed = EvidenceTagParser.parse(source.content, host, documentation);
-    inventory.declarations.push(...parsed.declarations);
-    inventory.reviews.push(...parsed.reviews);
-    inventory.diagnostics.push(...parsed.diagnostics);
-    inventory.annotationRanges.push(
-      ...parsed.declarations.map((entry) => entry.location),
-      ...parsed.reviews.map((entry) => entry.location),
-      ...parsed.diagnostics
+    EvidenceArrays.append(inventory.declarations, parsed.declarations);
+    EvidenceArrays.append(inventory.reviews, parsed.reviews);
+    EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
+    EvidenceArrays.append(
+      inventory.annotationRanges,
+      parsed.declarations.map((entry) => entry.location),
+    );
+    EvidenceArrays.append(
+      inventory.annotationRanges,
+      parsed.reviews.map((entry) => entry.location),
+    );
+    EvidenceArrays.append(
+      inventory.annotationRanges,
+      parsed.diagnostics
         .map((entry) => entry.location)
         .filter((entry) => entry !== undefined),
     );

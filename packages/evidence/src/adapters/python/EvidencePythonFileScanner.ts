@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
@@ -270,7 +271,7 @@ export class EvidencePythonFileScanner {
       );
       if (this.all.state !== "static" || names === undefined)
         this.dynamicAll(expression);
-      else this.all.names.push(...names);
+      else EvidenceArrays.append(this.all.names, names);
       return true;
     }
     return false;
@@ -1199,8 +1200,8 @@ export class EvidencePythonFileScanner {
         syntax,
       );
       text += mapped.text;
-      offsets.push(...mapped.offsets.slice(0, -1));
-      ends.push(...mapped.ends);
+      EvidenceArrays.append(offsets, mapped.offsets.slice(0, -1));
+      EvidenceArrays.append(ends, mapped.ends);
       boundary = mapped.offsets.at(-1) ?? boundary;
     }
     offsets.push(boundary);
@@ -1383,7 +1384,7 @@ export class EvidencePythonFileScanner {
         this.identifiers(child).some((name) => this.selectedModuleName(name))
       )
         return true;
-      queue.push(...child.namedChildren);
+      EvidenceArrays.append(queue, child.namedChildren);
     }
     return false;
   }
@@ -1423,7 +1424,7 @@ export class EvidencePythonFileScanner {
         this.publicIdentifiers(child).length !== 0
       )
         return true;
-      queue.push(...child.namedChildren);
+      EvidenceArrays.append(queue, child.namedChildren);
     }
     return false;
   }

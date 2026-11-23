@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
 import type { EvidenceParseSession } from "../../parsers/EvidenceParseSession";
@@ -1468,7 +1469,7 @@ export class EvidenceRubyFileScanner {
         return true;
       const callName = EvidenceRubySyntax.callName(current);
       if (callName !== undefined && this.surfaceCall(callName)) return true;
-      queue.push(...current.namedChildren);
+      EvidenceArrays.append(queue, current.namedChildren);
     }
     return false;
   }

@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import path from "node:path";
 
@@ -145,7 +146,7 @@ export class EvidenceRustModuleResolver {
     this.resolveImplementations();
     const occurrences = this.collectOccurrences();
     this.materialize(occurrences);
-    this.inventory.units.push(...this.units.values());
+    EvidenceArrays.append(this.inventory.units, this.units.values());
     return this.published;
   }
 

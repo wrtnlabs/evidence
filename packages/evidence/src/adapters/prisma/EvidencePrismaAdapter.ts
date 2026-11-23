@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import typia from "typia";
 
 import { EvidenceInventoryIndex } from "../../internal/EvidenceInventoryIndex";
@@ -151,7 +152,7 @@ export class EvidencePrismaAdapter implements IEvidenceAdapter<"prisma"> {
     for (const source of sources) {
       const previous = records.get(source.id);
       if (previous === undefined) records.set(source.id, source);
-      else previous.addresses.push(...source.addresses);
+      else EvidenceArrays.append(previous.addresses, source.addresses);
     }
     return Array.from(records.values())
       .map((source) => {
@@ -289,7 +290,7 @@ export class EvidencePrismaAdapter implements IEvidenceAdapter<"prisma"> {
           this.host(analysis.source, run, entry, true),
           true,
         );
-        entry.unit.withdrawals.push(...parsed.withdrawals);
+        EvidenceArrays.append(entry.unit.withdrawals, parsed.withdrawals);
       }
     for (const entry of owned.values())
       if (entry.unit.withdrawals.length === 0) this.recoverWithdrawal(entry);
@@ -323,9 +324,9 @@ export class EvidencePrismaAdapter implements IEvidenceAdapter<"prisma"> {
         inventory.hosts.push(host);
         const parsed = this.parse(analysis.source, run, host, attached);
         if (run.fileLevel) this.fileDeclarations(inventory, parsed);
-        else inventory.declarations.push(...parsed.declarations);
-        inventory.reviews.push(...parsed.reviews);
-        inventory.diagnostics.push(...parsed.diagnostics);
+        else EvidenceArrays.append(inventory.declarations, parsed.declarations);
+        EvidenceArrays.append(inventory.reviews, parsed.reviews);
+        EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
         this.reportBuried(inventory, analysis.source, run);
       }
     for (const entry of owned.values()) {

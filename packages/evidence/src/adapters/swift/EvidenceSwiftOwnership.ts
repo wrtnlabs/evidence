@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
 import type { IEvidenceSwiftDeclaration } from "./IEvidenceSwiftDeclaration";
 import type { IEvidenceSwiftFileAnalysis } from "./IEvidenceSwiftFileAnalysis";
@@ -220,7 +221,7 @@ export namespace EvidenceSwiftOwnership {
       if (child === undefined || seen.has(child.id)) continue;
       seen.add(child.id);
       result.push(child);
-      pending.push(...(children.get(child.id) ?? []));
+      EvidenceArrays.append(pending, children.get(child.id) ?? []);
     }
     return result.sort(
       (

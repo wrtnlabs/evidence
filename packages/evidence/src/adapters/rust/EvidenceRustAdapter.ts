@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import typia from "typia";
 
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
@@ -92,7 +93,7 @@ export class EvidenceRustAdapter implements IEvidenceAdapter<"rust"> {
         input.files.map((source) => this.scan(parser, source)),
       );
       for (const analysis of analyses) {
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.complete &&= analysis.complete;
       }
       // Source-local declaration IDs need the resolver's published identity map
@@ -187,7 +188,7 @@ export class EvidenceRustAdapter implements IEvidenceAdapter<"rust"> {
           for (const unitId of unitIds) {
             const unit = units.get(unitId);
             if (unit !== undefined)
-              unit.withdrawals.push(...parsed.withdrawals);
+              EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
           }
         }
       }
@@ -220,9 +221,9 @@ export class EvidenceRustAdapter implements IEvidenceAdapter<"rust"> {
           const host = this.host(analysis.source, documentation, undefined, []);
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
           continue;
         }
         for (const [siteId, unitIds] of groups) {
@@ -234,9 +235,9 @@ export class EvidenceRustAdapter implements IEvidenceAdapter<"rust"> {
           );
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
         }
       }
     this.materializeUndocumentedHosts(inventory, analyses, published, hidden);

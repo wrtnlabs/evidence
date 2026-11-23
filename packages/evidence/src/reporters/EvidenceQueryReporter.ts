@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../internal/EvidenceArrays";
 import type { IEvidenceDiagnostic } from "../structures/IEvidenceDiagnostic";
 import type { IEvidenceInspection } from "../structures/IEvidenceInspection";
 import type { IEvidenceInspectReport } from "../structures/IEvidenceInspectReport";
@@ -164,7 +165,7 @@ function inspectionLines(inspection: IEvidenceInspection): string[] {
         .join(", ")}`,
     );
   for (const unit of inspection.units) {
-    lines.push(...listItem(unit.item));
+    EvidenceArrays.append(lines, listItem(unit.item));
     if (unit.children.length !== 0)
       lines.push(
         `  Children: ${unit.children.map((child) => JSON.stringify(child.target)).join(", ")}`,

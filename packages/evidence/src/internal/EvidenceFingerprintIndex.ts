@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "./EvidenceArrays";
 import type { IEvidencePortableTrie } from "./IEvidencePortableTrie";
 import { createHash } from "node:crypto";
 
@@ -325,7 +326,7 @@ export class EvidenceFingerprintIndex {
       if (unit === undefined || visited.has(unit.id)) continue;
       visited.add(unit.id);
       output.push(unit);
-      queue.push(...(this.children.get(unit.id) ?? []));
+      EvidenceArrays.append(queue, this.children.get(unit.id) ?? []);
     }
     return output;
   }

@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
@@ -96,7 +97,7 @@ export class EvidenceMatlabAdapter implements IEvidenceAdapter<"matlab"> {
       // resolve it before groups receive public addresses or documentation hosts.
       EvidenceMatlabOwnership.resolve(analyses, inventory);
       for (const analysis of analyses) {
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.complete &&= analysis.complete;
       }
       const published = this.materializeUnits(inventory, analyses);
@@ -212,7 +213,7 @@ export class EvidenceMatlabAdapter implements IEvidenceAdapter<"matlab"> {
           inventory.addresses.push(address);
         }
       }
-    inventory.units.push(...units.values());
+    EvidenceArrays.append(inventory.units, units.values());
     return published;
   }
 
@@ -247,7 +248,7 @@ export class EvidenceMatlabAdapter implements IEvidenceAdapter<"matlab"> {
           for (const unitId of unitIds) {
             const unit = units.get(unitId);
             if (unit !== undefined)
-              unit.withdrawals.push(...parsed.withdrawals);
+              EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
           }
         }
       }
@@ -275,9 +276,9 @@ export class EvidenceMatlabAdapter implements IEvidenceAdapter<"matlab"> {
           const host = this.host(analysis.source, documentation, undefined, []);
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
           continue;
         }
         for (const [siteId, unitIds] of groups) {
@@ -289,9 +290,9 @@ export class EvidenceMatlabAdapter implements IEvidenceAdapter<"matlab"> {
           );
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
         }
       }
       this.materializeUndocumentedHosts(inventory, analysis, published, hidden);

@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../internal/EvidenceArrays";
 import typia from "typia";
 import { Parser } from "web-tree-sitter";
 import type { Language, Tree, Node as EvidenceNode } from "web-tree-sitter";
@@ -255,7 +256,7 @@ export class EvidenceParser {
               EvidenceTreeSitterRange.from(node),
             );
           }
-          pending.push(...children.reverse());
+          EvidenceArrays.append(pending, children.reverse());
         }
       }
       session = new EvidenceParseSession(tree, input.file);

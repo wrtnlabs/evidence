@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "./EvidenceArrays";
 import { EvidenceUnitSites } from "./EvidenceUnitSites";
 import typia from "typia";
 
@@ -59,8 +60,8 @@ export namespace EvidenceInventoryMerge {
     const units = new Map<string, IEvidenceUnit>();
     const hosts = new Map<string, IEvidenceHost>();
     for (const input of inputs) {
-      output.diagnostics.push(...input.diagnostics);
-      output.annotationRanges.push(...input.annotationRanges);
+      EvidenceArrays.append(output.diagnostics, input.diagnostics);
+      EvidenceArrays.append(output.annotationRanges, input.annotationRanges);
       for (const source of input.sources) {
         const previous = sources.get(source.id);
         if (previous === undefined) sources.set(source.id, source);
@@ -71,7 +72,7 @@ export namespace EvidenceInventoryMerge {
           fingerprintRootKey(previous) !== fingerprintRootKey(source)
         )
           conflict(output, "source", source.id);
-        else previous.addresses.push(...source.addresses);
+        else EvidenceArrays.append(previous.addresses, source.addresses);
       }
       for (const unit of input.units) {
         const previous = units.get(unit.id);
@@ -100,7 +101,7 @@ export namespace EvidenceInventoryMerge {
             )
               conflict(output, "declaration site", site.id);
           }
-          previous.withdrawals.push(...unit.withdrawals);
+          EvidenceArrays.append(previous.withdrawals, unit.withdrawals);
         }
       }
       for (const host of input.hosts) {
@@ -109,17 +110,17 @@ export namespace EvidenceInventoryMerge {
         else if (hostKey(previous) !== hostKey(host))
           conflict(output, "host", host.id);
         else {
-          previous.unitIds.push(...host.unitIds);
+          EvidenceArrays.append(previous.unitIds, host.unitIds);
           previous.origins = [
             ...(previous.origins ?? [previous.file]),
             ...(host.origins ?? [host.file]),
           ];
         }
       }
-      output.addresses.push(...input.addresses);
-      output.declarations.push(...input.declarations);
-      output.reviews.push(...input.reviews);
-      output.dependencies.push(...input.dependencies);
+      EvidenceArrays.append(output.addresses, input.addresses);
+      EvidenceArrays.append(output.declarations, input.declarations);
+      EvidenceArrays.append(output.reviews, input.reviews);
+      EvidenceArrays.append(output.dependencies, input.dependencies);
     }
     output.sources = Array.from(sources.values());
     output.units = Array.from(units.values());
