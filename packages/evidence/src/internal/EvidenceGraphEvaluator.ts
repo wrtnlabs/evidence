@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "./EvidenceArrays";
 import type { IEvidenceSourceFile } from "../structures/IEvidenceSourceFile";
 import type { IEvidenceSourceAddress } from "../structures/IEvidenceSourceAddress";
 import { EvidenceGraphClaimIndex } from "./EvidenceGraphClaimIndex";
@@ -201,8 +202,9 @@ export class EvidenceGraphEvaluator {
       detachedHostUnits,
       index: claimIndex,
     };
-    this.diagnostics.push(
-      ...snapshot.diagnostics.map((diagnostic) =>
+    EvidenceArrays.append(
+      this.diagnostics,
+      snapshot.diagnostics.map((diagnostic) =>
         this.context(diagnostic, claim.severity, claimIndex),
       ),
     );
@@ -331,8 +333,9 @@ export class EvidenceGraphEvaluator {
       claimIndex,
       referenceIndex,
     );
-    this.diagnostics.push(
-      ...snapshot.diagnostics.map((diagnostic) =>
+    EvidenceArrays.append(
+      this.diagnostics,
+      snapshot.diagnostics.map((diagnostic) =>
         this.context(
           diagnostic,
           reference.severity,
@@ -391,8 +394,9 @@ export class EvidenceGraphEvaluator {
       referenceIndex,
     );
     for (const entry of resolutions)
-      this.diagnostics.push(
-        ...entry.resolution.diagnostics.map((diagnostic) =>
+      EvidenceArrays.append(
+        this.diagnostics,
+        entry.resolution.diagnostics.map((diagnostic) =>
           this.context(
             diagnostic,
             reference.severity,
@@ -402,8 +406,9 @@ export class EvidenceGraphEvaluator {
         ),
       );
     for (const entry of reviewResolutions)
-      this.diagnostics.push(
-        ...entry.resolution.diagnostics.map((diagnostic) =>
+      EvidenceArrays.append(
+        this.diagnostics,
+        entry.resolution.diagnostics.map((diagnostic) =>
           this.context(
             diagnostic,
             reference.severity,

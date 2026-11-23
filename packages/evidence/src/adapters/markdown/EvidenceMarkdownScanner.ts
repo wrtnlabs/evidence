@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
 import { EvidenceTagParser } from "../../parsers/EvidenceTagParser";
 import type { IEvidenceHost } from "../../structures/IEvidenceHost";
@@ -789,9 +790,9 @@ export class EvidenceMarkdownScanner {
         host,
         documentation,
       );
-      this.inventory.declarations.push(...parsed.declarations);
-      this.inventory.reviews.push(...parsed.reviews);
-      this.inventory.diagnostics.push(...parsed.diagnostics);
+      EvidenceArrays.append(this.inventory.declarations, parsed.declarations);
+      EvidenceArrays.append(this.inventory.reviews, parsed.reviews);
+      EvidenceArrays.append(this.inventory.diagnostics, parsed.diagnostics);
     }
   }
 
@@ -898,9 +899,9 @@ export class EvidenceMarkdownScanner {
         host,
         documentation,
       );
-      this.inventory.declarations.push(...parsed.declarations);
-      this.inventory.reviews.push(...parsed.reviews);
-      this.inventory.diagnostics.push(...parsed.diagnostics);
+      EvidenceArrays.append(this.inventory.declarations, parsed.declarations);
+      EvidenceArrays.append(this.inventory.reviews, parsed.reviews);
+      EvidenceArrays.append(this.inventory.diagnostics, parsed.diagnostics);
       this.inventory.annotationRanges.push({
         file: host.file,
         range: host.range,

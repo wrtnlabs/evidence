@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
@@ -93,7 +94,7 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
         input.files.map((source) => this.scan(parser, source)),
       );
       for (const analysis of analyses) {
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.complete &&= analysis.complete;
       }
       // Reopened declarations must agree on semantic ownership before their
@@ -273,7 +274,7 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
       for (const declaration of visible) this.addSite(unit, declaration.site);
       units.set(id, unit);
     }
-    inventory.units.push(...units.values());
+    EvidenceArrays.append(inventory.units, units.values());
 
     for (const analysis of analyses)
       for (const declaration of analysis.declarations) {
@@ -451,7 +452,7 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
           for (const unitId of unitIds) {
             const unit = units.get(unitId);
             if (unit !== undefined)
-              unit.withdrawals.push(...parsed.withdrawals);
+              EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
           }
         }
       }
@@ -478,9 +479,9 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
           const host = this.host(analysis.source, documentation, undefined, []);
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
           continue;
         }
         for (const [siteId, unitIds] of groups) {
@@ -492,9 +493,9 @@ export class EvidenceRubyAdapter implements IEvidenceAdapter<"ruby"> {
           );
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
         }
       }
     this.materializeUndocumentedHosts(inventory, analyses, published, hidden);

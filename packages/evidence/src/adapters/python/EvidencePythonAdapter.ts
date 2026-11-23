@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import typia from "typia";
 
 import { EvidenceDocumentation } from "../../parsers/EvidenceDocumentation";
@@ -92,8 +93,11 @@ export class EvidencePythonAdapter implements IEvidenceAdapter<"python"> {
         input.files.map((source) => this.scan(parser, source)),
       );
       for (const analysis of analyses) {
-        inventory.units.push(...analysis.units.map((entry) => entry.unit));
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(
+          inventory.units,
+          analysis.units.map((entry) => entry.unit),
+        );
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.complete &&= analysis.complete;
       }
       // Public reachability must be settled before docstrings become eligible
@@ -258,7 +262,7 @@ export class EvidencePythonAdapter implements IEvidenceAdapter<"python"> {
           for (const unitId of unitIds) {
             const unit = units.get(unitId);
             if (unit !== undefined)
-              unit.withdrawals.push(...parsed.withdrawals);
+              EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
           }
         }
       }
@@ -300,9 +304,9 @@ export class EvidencePythonAdapter implements IEvidenceAdapter<"python"> {
         const host = this.host(analysis.source, documentation, siteId, unitIds);
         inventory.hosts.push(host);
         const parsed = this.parse(analysis.source, documentation, host);
-        inventory.declarations.push(...parsed.declarations);
-        inventory.reviews.push(...parsed.reviews);
-        inventory.diagnostics.push(...parsed.diagnostics);
+        EvidenceArrays.append(inventory.declarations, parsed.declarations);
+        EvidenceArrays.append(inventory.reviews, parsed.reviews);
+        EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
       }
     this.materializeUndocumentedHosts(inventory, analyses, published, hidden);
   }

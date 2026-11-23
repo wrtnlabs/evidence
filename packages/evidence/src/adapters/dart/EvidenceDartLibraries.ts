@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import type { IEvidenceSourceDependency } from "../../structures/IEvidenceSourceDependency";
 import { groupEvidenceRecords } from "../../internal/groupEvidenceRecords";
 import path from "node:path";
@@ -329,8 +330,9 @@ export namespace EvidenceDartLibraries {
           "Multiple exported libraries expose distinct declarations with the same name. Resolve the ambiguity with show/hide combinators.",
         );
         inventory.complete = false;
-        inventory.diagnostics.push(
-          ...analysis.diagnostics.filter(
+        EvidenceArrays.append(
+          inventory.diagnostics,
+          analysis.diagnostics.filter(
             (diagnostic) => diagnostic.code === "dart-export-conflict",
           ),
         );

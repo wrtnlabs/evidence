@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
 import type { IEvidenceCommentSyntax } from "../../structures/IEvidenceCommentSyntax";
@@ -126,7 +127,7 @@ export namespace EvidenceRubySyntax {
       if (node.type === "array") {
         const nested = literalNames(node.namedChildren);
         if (nested === undefined) return undefined;
-        output.push(...nested);
+        EvidenceArrays.append(output, nested);
         continue;
       }
       const name = literalName(node);

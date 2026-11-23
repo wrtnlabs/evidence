@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import typia from "typia";
 
@@ -96,7 +97,7 @@ export class EvidenceScalaAdapter implements IEvidenceAdapter<"scala"> {
       // settle that identity before publishing addresses and attaching Scaladoc.
       EvidenceScalaExports.resolve(analyses);
       for (const analysis of analyses) {
-        inventory.diagnostics.push(...analysis.diagnostics);
+        EvidenceArrays.append(inventory.diagnostics, analysis.diagnostics);
         inventory.complete &&= analysis.complete;
       }
       const published = this.materializeUnits(inventory, analyses);
@@ -230,7 +231,7 @@ export class EvidenceScalaAdapter implements IEvidenceAdapter<"scala"> {
           inventory.addresses.push(address);
         }
       }
-    inventory.units.push(...units.values());
+    EvidenceArrays.append(inventory.units, units.values());
     return published;
   }
 
@@ -264,7 +265,7 @@ export class EvidenceScalaAdapter implements IEvidenceAdapter<"scala"> {
           for (const unitId of unitIds) {
             const unit = units.get(unitId);
             if (unit !== undefined)
-              unit.withdrawals.push(...parsed.withdrawals);
+              EvidenceArrays.append(unit.withdrawals, parsed.withdrawals);
           }
         }
       }
@@ -292,9 +293,9 @@ export class EvidenceScalaAdapter implements IEvidenceAdapter<"scala"> {
           const host = this.host(analysis.source, documentation, undefined, []);
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
           continue;
         }
         for (const [siteId, unitIds] of groups) {
@@ -306,9 +307,9 @@ export class EvidenceScalaAdapter implements IEvidenceAdapter<"scala"> {
           );
           inventory.hosts.push(host);
           const parsed = this.parse(analysis.source, documentation, host);
-          inventory.declarations.push(...parsed.declarations);
-          inventory.reviews.push(...parsed.reviews);
-          inventory.diagnostics.push(...parsed.diagnostics);
+          EvidenceArrays.append(inventory.declarations, parsed.declarations);
+          EvidenceArrays.append(inventory.reviews, parsed.reviews);
+          EvidenceArrays.append(inventory.diagnostics, parsed.diagnostics);
         }
       }
       this.materializeUndocumentedHosts(inventory, analysis, published, hidden);

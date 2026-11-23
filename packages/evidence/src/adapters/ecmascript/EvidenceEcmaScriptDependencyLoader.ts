@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { realpath, stat } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import path from "node:path";
@@ -161,8 +162,11 @@ export namespace EvidenceEcmaScriptDependencyLoader {
                 candidate,
                 snapshot.root.absolute,
               );
-            snapshot.dependencies.push(...dependency.dependencies);
-            snapshot.diagnostics.push(...dependency.diagnostics);
+            EvidenceArrays.append(
+              snapshot.dependencies,
+              dependency.dependencies,
+            );
+            EvidenceArrays.append(snapshot.diagnostics, dependency.diagnostics);
             snapshot.complete &&= dependency.complete;
             for (const source of dependency.files) {
               if (

@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceSourceText } from "../../internal/EvidenceSourceText";
 import type { IEvidenceSourceFile } from "../../structures/IEvidenceSourceFile";
 import type { IEvidencePrismaCommentRun } from "./IEvidencePrismaCommentRun";
@@ -121,7 +122,7 @@ export class EvidencePrismaFileScanner {
     // A run is attached only at the next recognized location; all other syntax
     // flushes it so a detached comment cannot document a later declaration.
     const flush = (key: string): void => {
-      comments.push(...this.runs(pending, key));
+      EvidenceArrays.append(comments, this.runs(pending, key));
       pending = [];
     };
     const record = (key: string, line: number): void => {
@@ -344,8 +345,8 @@ export class EvidencePrismaFileScanner {
       const comment = byLine.get(line);
       if (comment !== undefined) {
         text += comment.text;
-        offsets.push(...comment.offsets);
-        ends.push(...comment.ends);
+        EvidenceArrays.append(offsets, comment.offsets);
+        EvidenceArrays.append(ends, comment.ends);
       }
       if (line !== last.line) {
         const newline = this.newlineOffsets[line] ?? this.source.content.length;

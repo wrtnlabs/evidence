@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 
 /**
@@ -143,7 +144,7 @@ export namespace EvidenceSqlPolicy {
         )
           return "Portable SQL columns require a documented standard scalar data type.";
       }
-      stack.push(...child.namedChildren);
+      EvidenceArrays.append(stack, child.namedChildren);
     }
     return undefined;
   }

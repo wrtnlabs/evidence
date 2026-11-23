@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../../internal/EvidenceArrays";
 import { EvidenceUnitSites } from "../../internal/EvidenceUnitSites";
 import type { Node as EvidenceNode } from "web-tree-sitter";
 import { EvidenceTypeScriptSyntax } from "../../parsers/EvidenceTypeScriptSyntax";
@@ -1121,7 +1122,7 @@ export class EvidenceEcmaScriptFileScanner {
           statement,
         );
     }
-    this.exports.push(...this.commonJsExports.values());
+    EvidenceArrays.append(this.exports, this.commonJsExports.values());
   }
 
   private inspectCommonJsDeclaration(declaration: EvidenceNode): void {
@@ -1501,7 +1502,8 @@ export class EvidenceEcmaScriptFileScanner {
         site,
         false,
       );
-      if (previous !== undefined) previous.content.push(...site.content);
+      if (previous !== undefined)
+        EvidenceArrays.append(previous.content, site.content);
       record.typeSpace ||= typeSpace;
       record.valueSpace ||= valueSpace;
       if (symbol !== "scope") record.unit.symbol = symbol;

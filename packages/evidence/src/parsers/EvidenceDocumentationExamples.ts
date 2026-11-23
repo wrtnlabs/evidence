@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "../internal/EvidenceArrays";
 import type { IEvidenceDocumentationFence } from "./IEvidenceDocumentationFence";
 
 /**
@@ -81,7 +82,7 @@ export namespace EvidenceDocumentationExamples {
       .split("\n")
       .filter((line: string): boolean => line.trim() !== "")
       .map((line: string): number => indentation(line));
-    return values.length === 0 ? 0 : Math.min(...values);
+    return EvidenceArrays.min(values) ?? 0;
   }
 
   /**

@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "./EvidenceArrays";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isBuiltin } from "node:module";
 import path from "node:path";
@@ -253,12 +254,16 @@ export class EvidenceConfigDependencyScanner {
       if (request.specifier.startsWith("node:") || isBuiltin(request.specifier))
         continue;
       if (request.specifier.startsWith("data:")) {
-        output.push(...(await this.resolveData(request.specifier)));
+        EvidenceArrays.append(
+          output,
+          await this.resolveData(request.specifier),
+        );
         continue;
       }
       if (request.specifier.startsWith("file:")) {
-        output.push(
-          ...(await this.resolveExact(fileURLToPath(request.specifier))),
+        EvidenceArrays.append(
+          output,
+          await this.resolveExact(fileURLToPath(request.specifier)),
         );
         continue;
       }

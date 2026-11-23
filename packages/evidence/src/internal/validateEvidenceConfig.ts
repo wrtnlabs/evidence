@@ -1,3 +1,4 @@
+import { EvidenceArrays } from "./EvidenceArrays";
 import { resolve } from "node:path";
 
 import { EvidenceLanguageRegistry } from "../parsers/EvidenceLanguageRegistry";
@@ -54,8 +55,9 @@ export function validateEvidenceConfig(
       );
     validateSymbols(problems, `${claimPath}.symbol`, claim.symbol, claim.type);
     if (claim.type === "csv" || claim.type === "tsv")
-      problems.push(
-        ...EvidenceDelimitedSyntax.optionProblems(claimPath, claim),
+      EvidenceArrays.append(
+        problems,
+        EvidenceDelimitedSyntax.optionProblems(claimPath, claim),
       );
     if (claim.evidenceExcludeCarriers !== undefined)
       validateGlobs(
@@ -87,8 +89,9 @@ export function validateEvidenceConfig(
         validateSwaggerSource(problems, `${base}.file`, reference.file);
       else validateGlobs(problems, `${base}.files`, reference.files);
       if (reference.type === "csv" || reference.type === "tsv")
-        problems.push(
-          ...EvidenceDelimitedSyntax.optionProblems(base, reference),
+        EvidenceArrays.append(
+          problems,
+          EvidenceDelimitedSyntax.optionProblems(base, reference),
         );
 
       if (reference.type !== "markdown" && "checklist" in reference)
