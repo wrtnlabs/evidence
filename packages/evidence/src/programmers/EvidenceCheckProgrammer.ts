@@ -135,7 +135,9 @@ export namespace EvidenceCheckProgrammer {
           severity: "error",
           message: `H1 owner '${owner.target}' does not name one selected claim unit (${owner.status}).`,
           repair:
-            "Use a file-qualified address of a unit selected by a claim using this evidence file.",
+            owner.status === "unsupported-host"
+              ? "Name a declaration inside this address-only scope; a namespace, module, extension or category hosts no evidence."
+              : "Use a file-qualified address of a unit selected by a claim using this evidence file.",
           location: owner.location,
         });
         claim.inventory.complete = false;

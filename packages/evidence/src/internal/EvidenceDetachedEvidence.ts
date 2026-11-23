@@ -15,6 +15,7 @@ import type { IEvidenceSourceLocation } from "../structures/IEvidenceSourceLocat
 import type { IEvidenceTargetResolution } from "../structures/IEvidenceTargetResolution";
 import type { IEvidenceTargetStatement } from "../structures/IEvidenceTargetStatement";
 import type { IEvidenceUnit } from "../structures/IEvidenceUnit";
+import type { EvidenceTargetResolutionStatus } from "../typings/EvidenceTargetResolutionStatus";
 import type { IEvidenceDetachedSelection } from "./IEvidenceDetachedSelection";
 import type { IEvidenceDetachedOwner } from "./IEvidenceDetachedOwner";
 
@@ -165,11 +166,20 @@ export namespace EvidenceDetachedEvidence {
         result.units.length === 1 &&
         owner !== undefined &&
         selected.has(owner.id);
+      // A resolved but unselected owner uses the native vocabulary: an
+      // address-only scope such as a namespace hosts no evidence, and any other
+      // unit lies outside the claim's symbol selection.
+      const status: EvidenceTargetResolutionStatus =
+        result.status !== "resolved" || isSelected || owner === undefined
+          ? result.status
+          : owner.symbol === "scope"
+            ? "unsupported-host"
+            : "out-of-population";
       owners.push({
         key: JSON.stringify([location.file, site.range.start.offset]),
         target: unit.name,
         location,
-        status: result.status,
+        status,
         ...(isSelected && owner !== undefined ? { unitId: owner.id } : {}),
       });
       if (isSelected && owner !== undefined) ownerIds.set(unit.id, owner.id);

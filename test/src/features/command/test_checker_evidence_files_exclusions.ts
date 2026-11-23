@@ -143,7 +143,11 @@ export async function test_checker_evidence_files_exclusions(): Promise<void> {
         passing.graph.claims[0]?.obligations[0]?.edges ?? [];
       TestValidator.equals(
         "edge kinds",
-        edges.map((edge: IEvidenceGraphEdge): string => edge.kind).sort(),
+        edges
+          .map((edge: IEvidenceGraphEdge): string => edge.kind)
+          .sort((left: string, right: string): number =>
+            left.localeCompare(right),
+          ),
         ["evidence", "evidenceExclude"],
       );
       const execute: IEvidenceUnit | undefined =
